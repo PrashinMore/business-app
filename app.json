@@ -1,14 +1,14 @@
 {
   "expo": {
-    "name": "business-app",
-    "slug": "business-app",
+    "name": "biznes",
+    "slug": "biznes",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/icon.png",
+    "icon": "./assets/yuki_logo.png",
     "userInterfaceStyle": "light",
     "newArchEnabled": true,
     "splash": {
-      "image": "./assets/splash-icon.png",
+      "image": "./assets/yuki_logo.png",
       "resizeMode": "contain",
       "backgroundColor": "#ffffff"
     },
@@ -17,7 +17,7 @@
     },
     "android": {
       "adaptiveIcon": {
-        "foregroundImage": "./assets/adaptive-icon.png",
+        "foregroundImage": "./assets/yuki_logo.png",
         "backgroundColor": "#ffffff"
       },
       "edgeToEdgeEnabled": true,
@@ -25,7 +25,7 @@
       "package": "com.anonymous.businessapp"
     },
     "web": {
-      "favicon": "./assets/favicon.png"
+      "favicon": "./assets/yuki_logo.png"
     }
   }
 }

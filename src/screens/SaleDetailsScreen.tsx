@@ -13,6 +13,7 @@ import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { getSaleDetails } from '../services/sales';
 import { Sale } from '../types/sales';
 import { RootStackParamList } from '../navigation/AppNavigator';
+import { useProductNames } from '../hooks/useProductNames';
 
 type SaleDetailsScreenRouteProp = RouteProp<RootStackParamList, 'SaleDetails'>;
 type SaleDetailsScreenNavigationProp = NativeStackNavigationProp<RootStackParamList, 'SaleDetails'>;
@@ -25,6 +26,15 @@ const SaleDetailsScreen: React.FC = () => {
   const [sale, setSale] = useState<Sale | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+
+  // Extract product IDs from sale items for fetching names
+  const productIds = sale?.items.map(item => item.productId) || [];
+
+  // Fetch product names
+  const { productNames, loading: productNamesLoading } = useProductNames({
+    productIds,
+    enabled: !!sale && productIds.length > 0,
+  });
 
   useEffect(() => {
     loadSaleDetails();
@@ -151,9 +161,9 @@ const SaleDetailsScreen: React.FC = () => {
             
             <View style={styles.itemDetails}>
               <View style={styles.itemDetailRow}>
-                <Text style={styles.itemDetailLabel}>Product ID:</Text>
-                <Text style={[styles.itemDetailValue, styles.productId]}>
-                  {item.productId.substring(0, 8)}...
+                <Text style={styles.itemDetailLabel}>Product:</Text>
+                <Text style={styles.itemDetailValue}>
+                  {productNames.get(item.productId) || `Loading... (${item.productId.substring(0, 8)}...)`}
                 </Text>
               </View>
               
@@ -306,10 +316,6 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#333',
     fontWeight: '500',
-  },
-  productId: {
-    fontFamily: 'monospace',
-    fontSize: 12,
   },
   errorText: {
     fontSize: 16,

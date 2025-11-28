@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
@@ -9,10 +9,13 @@ import {
   ActivityIndicator,
   Image,
   RefreshControl,
+  TextInput,
+  Modal,
 } from 'react-native';
 import { useCart } from '../context/CartContext';
 import { useAuth } from '../context/AuthContext';
 import { getMenuItems } from '../services/menu';
+import { getProducts } from '../services/products';
 import { Product } from '../types/menu';
 import { API_BASE_URL } from '../config/api';
 
@@ -20,17 +23,57 @@ const MenuScreen: React.FC = () => {
   const [menuItems, setMenuItems] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
+  const [categories, setCategories] = useState<string[]>([]);
+  const [categoryModalVisible, setCategoryModalVisible] = useState(false);
+  const [debounceTimer, setDebounceTimer] = useState<ReturnType<typeof setTimeout> | null>(null);
   const { cart, addToCart, updateQuantity } = useCart();
   const { user } = useAuth();
 
   useEffect(() => {
     loadMenuItems();
+    loadCategories();
   }, []);
+
+  // Debounced search effect
+  useEffect(() => {
+    if (debounceTimer) {
+      clearTimeout(debounceTimer);
+    }
+
+    const timer = setTimeout(() => {
+      loadMenuItems();
+    }, 500); // 500ms debounce
+
+    setDebounceTimer(timer);
+
+    return () => {
+      if (timer) clearTimeout(timer);
+    };
+  }, [searchQuery, selectedCategory]);
+
+  const loadCategories = async () => {
+    try {
+      const products = await getProducts();
+      const uniqueCategories = [...new Set(products.map(p => p.category))].sort();
+      setCategories(uniqueCategories);
+    } catch (error) {
+      console.error('Failed to load categories:', error);
+    }
+  };
 
   const loadMenuItems = async () => {
     try {
       setLoading(true);
-      const items = await getMenuItems();
+      const filters: { search?: string; category?: string } = {};
+      if (searchQuery.trim()) {
+        filters.search = searchQuery.trim();
+      }
+      if (selectedCategory) {
+        filters.category = selectedCategory;
+      }
+      const items = await getMenuItems(filters);
       setMenuItems(items);
     } catch (error: any) {
       Alert.alert('Error', error.message || 'Failed to load menu items');
@@ -42,7 +85,13 @@ const MenuScreen: React.FC = () => {
   const handleRefresh = async () => {
     setRefreshing(true);
     await loadMenuItems();
+    await loadCategories();
     setRefreshing(false);
+  };
+
+  const handleClearFilters = () => {
+    setSearchQuery('');
+    setSelectedCategory(null);
   };
 
   const handleAddToCart = (product: Product) => {
@@ -151,6 +200,108 @@ const MenuScreen: React.FC = () => {
 
   return (
     <View style={styles.container}>
+      {/* Search and Filter Bar */}
+      <View style={styles.filterContainer}>
+        <TextInput
+          style={styles.searchInput}
+          placeholder="Search products..."
+          placeholderTextColor="#999"
+          value={searchQuery}
+          onChangeText={setSearchQuery}
+        />
+        <TouchableOpacity
+          style={[styles.categoryButton, selectedCategory && styles.categoryButtonActive]}
+          onPress={() => setCategoryModalVisible(true)}
+        >
+          <Text style={[styles.categoryButtonText, selectedCategory && styles.categoryButtonTextActive]}>
+            {selectedCategory || 'All Categories'}
+          </Text>
+          <Text style={styles.categoryButtonArrow}>▼</Text>
+        </TouchableOpacity>
+        {(searchQuery || selectedCategory) && (
+          <TouchableOpacity
+            style={styles.clearButton}
+            onPress={handleClearFilters}
+          >
+            <Text style={styles.clearButtonText}>Clear</Text>
+          </TouchableOpacity>
+        )}
+      </View>
+
+      {/* Category Selection Modal */}
+      <Modal
+        visible={categoryModalVisible}
+        transparent={true}
+        animationType="slide"
+        onRequestClose={() => setCategoryModalVisible(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Select Category</Text>
+              <TouchableOpacity
+                onPress={() => setCategoryModalVisible(false)}
+                style={styles.modalCloseButton}
+              >
+                <Text style={styles.modalCloseText}>✕</Text>
+              </TouchableOpacity>
+            </View>
+            <FlatList
+              data={categories}
+              keyExtractor={(item) => item}
+              renderItem={({ item }) => (
+                <TouchableOpacity
+                  style={[
+                    styles.categoryOption,
+                    selectedCategory === item && styles.categoryOptionSelected,
+                  ]}
+                  onPress={() => {
+                    setSelectedCategory(item === selectedCategory ? null : item);
+                    setCategoryModalVisible(false);
+                  }}
+                >
+                  <Text
+                    style={[
+                      styles.categoryOptionText,
+                      selectedCategory === item && styles.categoryOptionTextSelected,
+                    ]}
+                  >
+                    {item}
+                  </Text>
+                  {selectedCategory === item && (
+                    <Text style={styles.checkmark}>✓</Text>
+                  )}
+                </TouchableOpacity>
+              )}
+              ListHeaderComponent={
+                <TouchableOpacity
+                  style={[
+                    styles.categoryOption,
+                    !selectedCategory && styles.categoryOptionSelected,
+                  ]}
+                  onPress={() => {
+                    setSelectedCategory(null);
+                    setCategoryModalVisible(false);
+                  }}
+                >
+                  <Text
+                    style={[
+                      styles.categoryOptionText,
+                      !selectedCategory && styles.categoryOptionTextSelected,
+                    ]}
+                  >
+                    All Categories
+                  </Text>
+                  {!selectedCategory && (
+                    <Text style={styles.checkmark}>✓</Text>
+                  )}
+                </TouchableOpacity>
+              }
+            />
+          </View>
+        </View>
+      </Modal>
+
       <FlatList
         data={menuItems}
         keyExtractor={item => item.id}
@@ -161,7 +312,19 @@ const MenuScreen: React.FC = () => {
         }
         ListEmptyComponent={
           <View style={styles.emptyContainer}>
-            <Text style={styles.emptyText}>No menu items available</Text>
+            <Text style={styles.emptyText}>
+              {searchQuery || selectedCategory
+                ? 'No menu items found matching your filters'
+                : 'No menu items available'}
+            </Text>
+            {(searchQuery || selectedCategory) && (
+              <TouchableOpacity
+                style={styles.clearFiltersButton}
+                onPress={handleClearFilters}
+              >
+                <Text style={styles.clearFiltersButtonText}>Clear Filters</Text>
+              </TouchableOpacity>
+            )}
           </View>
         }
       />
@@ -297,6 +460,138 @@ const styles = StyleSheet.create({
   emptyText: {
     fontSize: 16,
     color: '#666',
+  },
+  filterContainer: {
+    backgroundColor: '#fff',
+    padding: 12,
+    flexDirection: 'row',
+    gap: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: '#e0e0e0',
+  },
+  searchInput: {
+    flex: 1,
+    backgroundColor: '#f5f5f5',
+    borderRadius: 8,
+    padding: 12,
+    fontSize: 16,
+    borderWidth: 1,
+    borderColor: '#ddd',
+  },
+  categoryButton: {
+    backgroundColor: '#f5f5f5',
+    borderRadius: 8,
+    padding: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#ddd',
+    minWidth: 120,
+  },
+  categoryButtonActive: {
+    backgroundColor: '#e3f2fd',
+    borderColor: '#007AFF',
+  },
+  categoryButtonText: {
+    fontSize: 14,
+    color: '#666',
+    flex: 1,
+  },
+  categoryButtonTextActive: {
+    color: '#007AFF',
+    fontWeight: '600',
+  },
+  categoryButtonArrow: {
+    fontSize: 10,
+    color: '#666',
+    marginLeft: 4,
+  },
+  clearButton: {
+    backgroundColor: '#ff3b30',
+    borderRadius: 8,
+    padding: 12,
+    justifyContent: 'center',
+    alignItems: 'center',
+    minWidth: 60,
+  },
+  clearButtonText: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'flex-end',
+  },
+  modalContent: {
+    backgroundColor: '#fff',
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    maxHeight: '80%',
+    paddingBottom: 20,
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 20,
+    borderBottomWidth: 1,
+    borderBottomColor: '#e0e0e0',
+  },
+  modalTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#333',
+  },
+  modalCloseButton: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: '#f0f0f0',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  modalCloseText: {
+    fontSize: 18,
+    color: '#666',
+    fontWeight: 'bold',
+  },
+  categoryOption: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f0f0f0',
+  },
+  categoryOptionSelected: {
+    backgroundColor: '#e3f2fd',
+  },
+  categoryOptionText: {
+    fontSize: 16,
+    color: '#333',
+    flex: 1,
+  },
+  categoryOptionTextSelected: {
+    fontWeight: '600',
+    color: '#007AFF',
+  },
+  checkmark: {
+    fontSize: 18,
+    color: '#007AFF',
+    fontWeight: 'bold',
+  },
+  clearFiltersButton: {
+    marginTop: 16,
+    backgroundColor: '#007AFF',
+    paddingVertical: 10,
+    paddingHorizontal: 20,
+    borderRadius: 8,
+  },
+  clearFiltersButtonText: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: '600',
   },
 });
 

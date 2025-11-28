@@ -125,39 +125,93 @@ async function cacheMenuItems(menuItems: Product[]): Promise<void> {
 }
 
 /**
- * Get menu items (products with category containing "menu")
+ * Get menu items (products that are NOT in raw material categories)
  * Falls back to cache if offline or request fails
+ * @param filters - Optional filters for search and category
  * @returns Promise with array of menu items
  */
-export async function getMenuItems(): Promise<Product[]> {
+export async function getMenuItems(filters?: { search?: string; category?: string }): Promise<Product[]> {
   try {
-    const products = await getProducts();
+    // Import getProducts from products service to use filters
+    const productsModule = await import('./products');
+    const { getProducts } = productsModule;
     
-    // Filter for menu items (category contains "menu")
-    const menuItems = products.filter(
-      product => product.category.toLowerCase().includes('menu')
-    );
-    
-    // Cache menu items separately for faster access
-    await cacheMenuItems(menuItems);
-    return menuItems;
-  } catch (error) {
-    // Try to return cached menu items if available
-    const cachedMenuItems = await getCachedMenuItems();
-    if (cachedMenuItems) {
-      console.log('Using cached menu items due to network error');
-      return cachedMenuItems;
+    // Build filters for API call
+    const apiFilters: productsModule.ProductFilters = {};
+    if (filters?.search) {
+      apiFilters.search = filters.search;
+    }
+    if (filters?.category) {
+      apiFilters.category = filters.category;
     }
     
-    // Fallback: try to get cached products and filter
-    const cachedProducts = await getCachedProducts();
-    if (cachedProducts) {
-      const menuItems = cachedProducts.filter(
-        product => product.category.toLowerCase().includes('menu')
-      );
-      if (menuItems.length > 0) {
-        console.log('Using cached products to get menu items');
-        return menuItems;
+    const products = await getProducts(apiFilters);
+    
+    // Get raw material categories to exclude them from menu
+    let rawMaterialCategoryNames: string[] = [];
+    try {
+      const { getCategories } = await import('./categories');
+      const categories = await getCategories();
+      rawMaterialCategoryNames = categories
+        .filter(cat => cat.isRawMaterial)
+        .map(cat => cat.name.toLowerCase());
+    } catch (error) {
+      console.warn('Failed to load categories for menu filtering, showing all products:', error);
+    }
+    
+    // Filter out products in raw material categories
+    // If categories API fails, show all products (backward compatibility)
+    const menuItems = products.filter(product => {
+      if (rawMaterialCategoryNames.length === 0) {
+        // If we couldn't load categories, show all products
+        return true;
+      }
+      // Exclude products whose category is a raw material category
+      return !rawMaterialCategoryNames.includes(product.category.toLowerCase());
+    });
+    
+    // Cache menu items separately for faster access (only if no filters applied)
+    if (!filters?.search && !filters?.category) {
+      await cacheMenuItems(menuItems);
+    }
+    return menuItems;
+  } catch (error) {
+    // Try to return cached menu items if available (only if no filters)
+    if (!filters?.search && !filters?.category) {
+      const cachedMenuItems = await getCachedMenuItems();
+      if (cachedMenuItems) {
+        console.log('Using cached menu items due to network error');
+        return cachedMenuItems;
+      }
+      
+      // Fallback: try to get cached products and filter
+      const cachedProducts = await getCachedProducts();
+      if (cachedProducts) {
+        // Try to get raw material categories for filtering
+        let rawMaterialCategoryNames: string[] = [];
+        try {
+          const { getCategories } = await import('./categories');
+          const categories = await getCategories();
+          rawMaterialCategoryNames = categories
+            .filter(cat => cat.isRawMaterial)
+            .map(cat => cat.name.toLowerCase());
+        } catch (catError) {
+          console.warn('Failed to load categories for cache filtering:', catError);
+        }
+        
+        const menuItems = cachedProducts.filter(product => {
+          if (rawMaterialCategoryNames.length === 0) {
+            // If we couldn't load categories, show all products
+            return true;
+          }
+          // Exclude products whose category is a raw material category
+          return !rawMaterialCategoryNames.includes(product.category.toLowerCase());
+        });
+        
+        if (menuItems.length > 0) {
+          console.log('Using cached products to get menu items');
+          return menuItems;
+        }
       }
     }
     

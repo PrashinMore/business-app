@@ -10,8 +10,10 @@ import {
   RefreshControl,
   TextInput,
   ScrollView,
+  Platform,
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
+import DateTimePickerModal from 'react-native-modal-datetime-picker';
 import { listSales, getPaymentTypeTotals } from '../services/sales';
 import { Sale, SalesFilters, PaymentTypeTotals } from '../types/sales';
 import { RootStackParamList } from '../navigation/AppNavigator';
@@ -32,6 +34,10 @@ const SalesListScreen: React.FC = () => {
   const [productId, setProductId] = useState('');
   const [staff, setStaff] = useState('');
   const [paymentType, setPaymentType] = useState<'' | 'cash' | 'UPI'>('');
+
+  // Date picker states
+  const [isFromDatePickerVisible, setFromDatePickerVisible] = useState(false);
+  const [isToDatePickerVisible, setToDatePickerVisible] = useState(false);
 
   useEffect(() => {
     loadSales();
@@ -80,7 +86,37 @@ const SalesListScreen: React.FC = () => {
     setProductId('');
     setStaff('');
     setPaymentType('');
+    setFromDatePickerVisible(false);
+    setToDatePickerVisible(false);
     setTimeout(() => loadSales(), 100);
+  };
+
+  const showFromDatePicker = () => {
+    setFromDatePickerVisible(true);
+  };
+
+  const hideFromDatePicker = () => {
+    setFromDatePickerVisible(false);
+  };
+
+  const handleFromDateConfirm = (date: Date) => {
+    const formattedDate = date.toISOString().split('T')[0]; // YYYY-MM-DD format
+    setFromDate(formattedDate);
+    hideFromDatePicker();
+  };
+
+  const showToDatePicker = () => {
+    setToDatePickerVisible(true);
+  };
+
+  const hideToDatePicker = () => {
+    setToDatePickerVisible(false);
+  };
+
+  const handleToDateConfirm = (date: Date) => {
+    const formattedDate = date.toISOString().split('T')[0]; // YYYY-MM-DD format
+    setToDate(formattedDate);
+    hideToDatePicker();
   };
 
   const formatDate = (dateString: string) => {
@@ -159,21 +195,19 @@ const SalesListScreen: React.FC = () => {
         <ScrollView style={styles.filtersContainer}>
           <Text style={styles.filtersTitle}>Filters</Text>
 
-          <TextInput
-            style={styles.filterInput}
-            placeholder="From Date (YYYY-MM-DD)"
-            placeholderTextColor="#999"
-            value={fromDate}
-            onChangeText={setFromDate}
-          />
+          <TouchableOpacity style={styles.datePickerButton} onPress={showFromDatePicker}>
+            <Text style={fromDate ? styles.datePickerText : styles.datePickerPlaceholder}>
+              {fromDate ? formatDate(fromDate) : 'From Date'}
+            </Text>
+            <Text style={styles.datePickerIcon}>📅</Text>
+          </TouchableOpacity>
 
-          <TextInput
-            style={styles.filterInput}
-            placeholder="To Date (YYYY-MM-DD)"
-            placeholderTextColor="#999"
-            value={toDate}
-            onChangeText={setToDate}
-          />
+          <TouchableOpacity style={styles.datePickerButton} onPress={showToDatePicker}>
+            <Text style={toDate ? styles.datePickerText : styles.datePickerPlaceholder}>
+              {toDate ? formatDate(toDate) : 'To Date'}
+            </Text>
+            <Text style={styles.datePickerIcon}>📅</Text>
+          </TouchableOpacity>
 
           <TextInput
             style={styles.filterInput}
@@ -291,6 +325,25 @@ const SalesListScreen: React.FC = () => {
           </View>
         }
       />
+
+      {/* Date Picker Modals */}
+      <DateTimePickerModal
+        isVisible={isFromDatePickerVisible}
+        mode="date"
+        onConfirm={handleFromDateConfirm}
+        onCancel={hideFromDatePicker}
+        maximumDate={toDate ? new Date(toDate) : new Date()}
+        date={fromDate ? new Date(fromDate) : new Date()}
+      />
+
+      <DateTimePickerModal
+        isVisible={isToDatePickerVisible}
+        mode="date"
+        onConfirm={handleToDateConfirm}
+        onCancel={hideToDatePicker}
+        minimumDate={fromDate ? new Date(fromDate) : undefined}
+        date={toDate ? new Date(toDate) : new Date()}
+      />
     </View>
   );
 };
@@ -341,6 +394,29 @@ const styles = StyleSheet.create({
     marginBottom: 12,
     borderWidth: 1,
     borderColor: '#ddd',
+  },
+  datePickerButton: {
+    backgroundColor: '#f5f5f5',
+    borderRadius: 8,
+    padding: 12,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: '#ddd',
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  datePickerText: {
+    fontSize: 14,
+    color: '#333',
+  },
+  datePickerPlaceholder: {
+    fontSize: 14,
+    color: '#999',
+  },
+  datePickerIcon: {
+    fontSize: 16,
+    color: '#666',
   },
   paymentTypeFilter: {
     flexDirection: 'row',

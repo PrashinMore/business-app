@@ -10,9 +10,12 @@ import {
   Alert,
   Image,
 } from 'react-native';
+import { useNavigation } from '@react-navigation/native';
+import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useAuth } from '../context/AuthContext';
 import { useCart } from '../context/CartContext';
 import { loadAllDashboardData, getSalesTrend } from '../services/dashboard';
+import { RootStackParamList } from '../navigation/AppNavigator';
 import {
   DashboardSummary,
   SalesTrendData,
@@ -23,7 +26,10 @@ import {
 } from '../types/dashboard';
 import { API_BASE_URL } from '../config/api';
 
+type HomeScreenNavigationProp = NativeStackNavigationProp<RootStackParamList>;
+
 const HomeScreen: React.FC = () => {
+  const navigation = useNavigation<HomeScreenNavigationProp>();
   const { user } = useAuth();
   const { getCartItemCount, getTotalAmount } = useCart();
   
@@ -274,8 +280,17 @@ const HomeScreen: React.FC = () => {
       {/* Low Stock Alerts */}
       {lowStock.length > 0 && (
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>⚠️ Low Stock Alerts</Text>
-          <View style={styles.lowStockCard}>
+          <TouchableOpacity
+            onPress={() => navigation.navigate('Inventory')}
+            style={styles.sectionHeader}
+          >
+            <Text style={styles.sectionTitle}>⚠️ Low Stock Alerts</Text>
+            <Text style={styles.viewAllText}>View All ›</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.lowStockCard}
+            onPress={() => navigation.navigate('Inventory')}
+          >
             {lowStock.slice(0, 5).map((item) => (
               <View key={item.id} style={styles.lowStockItem}>
                 <View style={styles.lowStockInfo}>
@@ -303,7 +318,7 @@ const HomeScreen: React.FC = () => {
                 +{lowStock.length - 5} more items
               </Text>
             )}
-          </View>
+          </TouchableOpacity>
         </View>
       )}
 
@@ -414,11 +429,21 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 12,
   },
+  sectionHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
   sectionTitle: {
     fontSize: 20,
     fontWeight: 'bold',
     color: '#333',
-    marginBottom: 12,
+  },
+  viewAllText: {
+    fontSize: 14,
+    color: '#007AFF',
+    fontWeight: '600',
   },
   summaryGrid: {
     flexDirection: 'row',

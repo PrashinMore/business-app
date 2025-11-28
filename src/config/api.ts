@@ -13,24 +13,24 @@
  * - Mac/Linux: ifconfig
  */
 
-import { Platform } from 'react-native';
-
-// Development API URL
-// Update this to match your development environment
-const getDevelopmentApiUrl = () => {
-  if (__DEV__) {
-    // For Android Emulator, use 10.0.2.2 to access localhost on your machine
-    if (Platform.OS === 'android') {
-      return 'http://10.0.2.2:4000';
-    }
-    // For iOS Simulator, localhost works fine
-    return 'http://localhost:4000';
-  }
-  // Production API URL - Update this with your production domain
-  return 'https://your-api-domain.com';
+// Backend API URL
+const getApiUrl = () => {
+  // Use production backend URL
+  return 'http://localhost:4000';
+  
+  // Uncomment below for local development if needed
+  // if (__DEV__) {
+  //   // For Android Emulator, use 10.0.2.2 to access localhost on your machine
+  //   if (Platform.OS === 'android') {
+  //     return 'http://10.0.2.2:4000';
+  //   }
+  //   // For iOS Simulator, localhost works fine
+  //   return 'http://localhost:4000';
+  // }
+  // return 'https://bizzness-d864.onrender.com';
 };
 
-export const API_BASE_URL = getDevelopmentApiUrl();
+export const API_BASE_URL = getApiUrl();
 
 // Export for use in other files if needed
 export default {

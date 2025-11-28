@@ -13,8 +13,10 @@ import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useAuth } from '../context/AuthContext';
 import { RootStackParamList } from '../navigation/AppNavigator';
 
+type ProfileScreenNavigationProp = NativeStackNavigationProp<RootStackParamList>;
+
 const ProfileScreen: React.FC = () => {
-  const navigation = useNavigation<any>();
+  const navigation = useNavigation<ProfileScreenNavigationProp>();
   const { user, logout, refreshUser } = useAuth();
   const [refreshing, setRefreshing] = React.useState(false);
 
@@ -108,6 +110,36 @@ const ProfileScreen: React.FC = () => {
             {new Date(user.createdAt).toLocaleDateString()}
           </Text>
         </View>
+      </View>
+
+      <View style={styles.card}>
+        <Text style={styles.cardTitle}>Management</Text>
+        
+        <TouchableOpacity
+          style={styles.menuItem}
+          onPress={() => navigation.navigate('ProductsList')}
+        >
+          <Text style={styles.menuItemText}>📦 Products</Text>
+          <Text style={styles.menuItemArrow}>›</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={styles.menuItem}
+          onPress={() => navigation.navigate('Inventory')}
+        >
+          <Text style={styles.menuItemText}>📊 Inventory</Text>
+          <Text style={styles.menuItemArrow}>›</Text>
+        </TouchableOpacity>
+
+        {user?.role === 'admin' && (
+          <TouchableOpacity
+            style={styles.menuItem}
+            onPress={() => navigation.navigate('OrganizationsList')}
+          >
+            <Text style={styles.menuItemText}>🏢 Organizations</Text>
+            <Text style={styles.menuItemArrow}>›</Text>
+          </TouchableOpacity>
+        )}
       </View>
 
       <TouchableOpacity
@@ -232,6 +264,23 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '600',
     color: '#1976d2',
+  },
+  menuItem: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f0f0f0',
+  },
+  menuItemText: {
+    fontSize: 16,
+    color: '#333',
+    fontWeight: '500',
+  },
+  menuItemArrow: {
+    fontSize: 20,
+    color: '#999',
   },
   resetPasswordButton: {
     backgroundColor: '#fff',
