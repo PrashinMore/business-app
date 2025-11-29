@@ -153,15 +153,32 @@ const SalesListScreen: React.FC = () => {
 
       <View style={styles.saleInfo}>
         <Text style={styles.saleItems}>{getTotalItems(item)} items</Text>
-        <View
-          style={[
-            styles.paymentTypeBadge,
-            item.paymentType === 'UPI' && styles.paymentTypeBadgeUPI,
-          ]}
-        >
-          <Text style={styles.paymentTypeText}>
-            {item.paymentType || 'cash'?.toUpperCase()}
-          </Text>
+        <View style={styles.paymentInfo}>
+          <View
+            style={[
+              styles.paymentTypeBadge,
+              item.paymentType === 'UPI' && styles.paymentTypeBadgeUPI,
+            ]}
+          >
+            <Text style={styles.paymentTypeText}>
+              {item.paymentType || 'cash'?.toUpperCase()}
+            </Text>
+          </View>
+          <View
+            style={[
+              styles.paymentStatusBadge,
+              item.isPaid ? styles.paymentStatusBadgePaid : styles.paymentStatusBadgePending,
+            ]}
+          >
+            <Text
+              style={[
+                styles.paymentStatusText,
+                item.isPaid && styles.paymentStatusTextPaid,
+              ]}
+            >
+              {item.isPaid ? 'Paid' : 'Pending'}
+            </Text>
+          </View>
         </View>
       </View>
 
@@ -576,6 +593,30 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: '#666',
     textTransform: 'uppercase',
+  },
+  paymentInfo: {
+    flexDirection: 'row',
+    gap: 8,
+    alignItems: 'center',
+  },
+  paymentStatusBadge: {
+    paddingHorizontal: 12,
+    paddingVertical: 4,
+    borderRadius: 12,
+  },
+  paymentStatusBadgePending: {
+    backgroundColor: '#fff3cd',
+  },
+  paymentStatusBadgePaid: {
+    backgroundColor: '#d4edda',
+  },
+  paymentStatusText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#856404',
+  },
+  paymentStatusTextPaid: {
+    color: '#155724',
   },
   saleId: {
     fontSize: 11,

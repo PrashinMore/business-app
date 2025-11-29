@@ -35,6 +35,8 @@ export interface Sale {
   totalAmount: number;
   soldBy: string;
   paymentType: string;
+  isPaid: boolean;
+  organizationId: string;
   createdAt: string;
 }
 
@@ -48,5 +50,6 @@ export interface CreateSaleRequest {
   totalAmount: number;
   soldBy: string;
   paymentType?: 'cash' | 'UPI';
+  isPaid?: boolean;
 }
 

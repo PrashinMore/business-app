@@ -135,3 +135,37 @@ export async function getPaymentTypeTotals(
   }
 }
 
+/**
+ * Update sale payment status and/or payment type
+ * @param saleId - Sale UUID
+ * @param updates - Payment updates (paymentType and/or isPaid)
+ * @returns Promise with updated sale
+ */
+export async function updateSalePayment(
+  saleId: string,
+  updates: { paymentType?: 'cash' | 'UPI'; isPaid?: boolean }
+): Promise<Sale> {
+  try {
+    // Validate that at least one field is provided
+    if (updates.paymentType === undefined && updates.isPaid === undefined) {
+      throw new Error('At least one field (paymentType or isPaid) must be provided');
+    }
+
+    const response = await apiRequest(`/sales/${saleId}`, {
+      method: 'PATCH',
+      body: JSON.stringify(updates),
+    });
+
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.message || 'Failed to update sale payment');
+    }
+
+    const sale: Sale = await response.json();
+    return sale;
+  } catch (error) {
+    console.error('Update sale payment error:', error);
+    throw error;
+  }
+}
+

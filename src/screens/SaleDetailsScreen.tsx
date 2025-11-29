@@ -10,10 +10,11 @@ import {
 } from 'react-native';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import { getSaleDetails } from '../services/sales';
+import { getSaleDetails, updateSalePayment } from '../services/sales';
 import { Sale } from '../types/sales';
 import { RootStackParamList } from '../navigation/AppNavigator';
 import { useProductNames } from '../hooks/useProductNames';
+import { TouchableOpacity } from 'react-native';
 
 type SaleDetailsScreenRouteProp = RouteProp<RootStackParamList, 'SaleDetails'>;
 type SaleDetailsScreenNavigationProp = NativeStackNavigationProp<RootStackParamList, 'SaleDetails'>;
@@ -26,6 +27,7 @@ const SaleDetailsScreen: React.FC = () => {
   const [sale, setSale] = useState<Sale | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [updatingPayment, setUpdatingPayment] = useState(false);
 
   // Extract product IDs from sale items for fetching names
   const productIds = sale?.items.map(item => item.productId) || [];
@@ -57,6 +59,36 @@ const SaleDetailsScreen: React.FC = () => {
     setRefreshing(true);
     await loadSaleDetails();
     setRefreshing(false);
+  };
+
+  const handleUpdatePayment = async (isPaid: boolean) => {
+    if (!sale) return;
+
+    try {
+      setUpdatingPayment(true);
+      const updatedSale = await updateSalePayment(sale.id, { isPaid });
+      setSale(updatedSale);
+      Alert.alert('Success', `Payment status updated to ${isPaid ? 'Paid' : 'Pending'}`);
+    } catch (error: any) {
+      Alert.alert('Error', error.message || 'Failed to update payment status');
+    } finally {
+      setUpdatingPayment(false);
+    }
+  };
+
+  const handleUpdatePaymentType = async (paymentType: 'cash' | 'UPI') => {
+    if (!sale) return;
+
+    try {
+      setUpdatingPayment(true);
+      const updatedSale = await updateSalePayment(sale.id, { paymentType });
+      setSale(updatedSale);
+      Alert.alert('Success', `Payment type updated to ${paymentType.toUpperCase()}`);
+    } catch (error: any) {
+      Alert.alert('Error', error.message || 'Failed to update payment type');
+    } finally {
+      setUpdatingPayment(false);
+    }
   };
 
   const formatDate = (dateString: string) => {
@@ -126,15 +158,84 @@ const SaleDetailsScreen: React.FC = () => {
 
         <View style={styles.infoRow}>
           <Text style={styles.infoLabel}>Payment Type:</Text>
-          <View
-            style={[
-              styles.paymentTypeBadge,
-              sale.paymentType === 'UPI' && styles.paymentTypeBadgeUPI,
-            ]}
-          >
-            <Text style={styles.paymentTypeText}>
-              {(sale.paymentType || 'cash').toUpperCase()}
-            </Text>
+          <View style={styles.paymentTypeContainer}>
+            <TouchableOpacity
+              style={[
+                styles.paymentTypeBadge,
+                sale.paymentType === 'UPI' && styles.paymentTypeBadgeUPI,
+              ]}
+              onPress={() => {
+                if (sale.paymentType !== 'cash') {
+                  handleUpdatePaymentType('cash');
+                }
+              }}
+              disabled={updatingPayment}
+            >
+              <Text style={styles.paymentTypeText}>
+                {(sale.paymentType || 'cash').toUpperCase()}
+              </Text>
+            </TouchableOpacity>
+            {sale.paymentType === 'cash' && (
+              <TouchableOpacity
+                style={[styles.paymentTypeButton, styles.paymentTypeButtonUPI]}
+                onPress={() => handleUpdatePaymentType('UPI')}
+                disabled={updatingPayment}
+              >
+                <Text style={styles.paymentTypeButtonText}>Switch to UPI</Text>
+              </TouchableOpacity>
+            )}
+            {sale.paymentType === 'UPI' && (
+              <TouchableOpacity
+                style={[styles.paymentTypeButton, styles.paymentTypeButtonCash]}
+                onPress={() => handleUpdatePaymentType('cash')}
+                disabled={updatingPayment}
+              >
+                <Text style={styles.paymentTypeButtonText}>Switch to Cash</Text>
+              </TouchableOpacity>
+            )}
+          </View>
+        </View>
+
+        <View style={styles.infoRow}>
+          <Text style={styles.infoLabel}>Payment Status:</Text>
+          <View style={styles.paymentStatusContainer}>
+            <View
+              style={[
+                styles.paymentStatusBadge,
+                sale.isPaid ? styles.paymentStatusBadgePaid : styles.paymentStatusBadgePending,
+              ]}
+            >
+              <Text
+                style={[
+                  styles.paymentStatusText,
+                  sale.isPaid && styles.paymentStatusTextPaid,
+                ]}
+              >
+                {sale.isPaid ? 'Paid' : 'Pending'}
+              </Text>
+            </View>
+            {!sale.isPaid && (
+              <TouchableOpacity
+                style={styles.markPaidButton}
+                onPress={() => handleUpdatePayment(true)}
+                disabled={updatingPayment}
+              >
+                <Text style={styles.markPaidButtonText}>
+                  {updatingPayment ? 'Updating...' : 'Mark as Paid'}
+                </Text>
+              </TouchableOpacity>
+            )}
+            {sale.isPaid && (
+              <TouchableOpacity
+                style={styles.markPendingButton}
+                onPress={() => handleUpdatePayment(false)}
+                disabled={updatingPayment}
+              >
+                <Text style={styles.markPendingButtonText}>
+                  {updatingPayment ? 'Updating...' : 'Mark as Pending'}
+                </Text>
+              </TouchableOpacity>
+            )}
           </View>
         </View>
 
@@ -262,6 +363,11 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     color: '#007AFF',
   },
+  paymentTypeContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
   paymentTypeBadge: {
     backgroundColor: '#f3e5f5',
     paddingHorizontal: 12,
@@ -275,6 +381,71 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '600',
     color: '#666',
+  },
+  paymentTypeButton: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 8,
+    borderWidth: 1,
+  },
+  paymentTypeButtonUPI: {
+    borderColor: '#2196F3',
+    backgroundColor: '#e3f2fd',
+  },
+  paymentTypeButtonCash: {
+    borderColor: '#9C27B0',
+    backgroundColor: '#f3e5f5',
+  },
+  paymentTypeButtonText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#666',
+  },
+  paymentStatusContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  paymentStatusBadge: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 12,
+  },
+  paymentStatusBadgePending: {
+    backgroundColor: '#fff3cd',
+  },
+  paymentStatusBadgePaid: {
+    backgroundColor: '#d4edda',
+  },
+  paymentStatusText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#856404',
+  },
+  paymentStatusTextPaid: {
+    color: '#155724',
+  },
+  markPaidButton: {
+    backgroundColor: '#28a745',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 8,
+  },
+  markPaidButtonText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#fff',
+  },
+  markPendingButton: {
+    backgroundColor: '#ffc107',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 8,
+  },
+  markPendingButtonText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#856404',
   },
   itemCard: {
     backgroundColor: '#f9f9f9',

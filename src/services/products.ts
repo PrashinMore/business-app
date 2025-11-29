@@ -322,3 +322,86 @@ export async function getCategories(): Promise<string[]> {
   }
 }
 
+/**
+ * Get product name suggestions
+ * @param query - Search query (minimum 2 characters)
+ * @param limit - Maximum number of suggestions to return (default: 10)
+ * @returns Promise with array of suggestion objects containing name
+ */
+export async function getProductSuggestions(
+  query: string,
+  limit: number = 10
+): Promise<{ name: string }[]> {
+  try {
+    if (!query || query.trim().length < 2) {
+      return [];
+    }
+
+    const params = new URLSearchParams();
+    params.set('q', query.trim());
+    params.set('limit', limit.toString());
+
+    const response = await apiRequest(`/products/suggestions?${params.toString()}`, {
+      method: 'GET',
+    });
+
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.message || 'Failed to load suggestions');
+    }
+
+    const suggestions: { name: string }[] = await response.json();
+    return suggestions;
+  } catch (error) {
+    console.error('Get product suggestions error:', error);
+    throw error;
+  }
+}
+
+/**
+ * Check if a product name is a duplicate
+ * @param name - Product name to check
+ * @param excludeId - Optional product ID to exclude from check (for edit forms)
+ * @returns Promise with duplicate check result
+ */
+export interface DuplicateCheckResult {
+  isDuplicate: boolean;
+  message?: string;
+  similarProduct?: {
+    id: string;
+    name: string;
+  };
+}
+
+export async function checkDuplicate(
+  name: string,
+  excludeId?: string
+): Promise<DuplicateCheckResult> {
+  try {
+    if (!name || name.trim().length < 2) {
+      return { isDuplicate: false };
+    }
+
+    const params = new URLSearchParams();
+    params.set('name', name.trim());
+    if (excludeId) {
+      params.set('excludeId', excludeId);
+    }
+
+    const response = await apiRequest(`/products/check-duplicate?${params.toString()}`, {
+      method: 'GET',
+    });
+
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.message || 'Failed to check duplicate');
+    }
+
+    const result: DuplicateCheckResult = await response.json();
+    return result;
+  } catch (error) {
+    console.error('Check duplicate error:', error);
+    throw error;
+  }
+}
+

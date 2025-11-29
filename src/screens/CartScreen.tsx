@@ -23,6 +23,7 @@ const CartScreen: React.FC = () => {
   const { isOnline, queuedSalesCount, manualSync } = useSync();
   const [checkingOut, setCheckingOut] = useState(false);
   const [paymentType, setPaymentType] = useState<'cash' | 'UPI'>('cash');
+  const [isPaid, setIsPaid] = useState(false);
 
   const handleUpdateQuantity = (productId: string, change: number) => {
     const cartItem = cart.find(item => item.productId === productId);
@@ -85,6 +86,7 @@ const CartScreen: React.FC = () => {
         totalAmount: Number(totalAmount.toFixed(2)),
         soldBy: user.id,
         paymentType,
+        isPaid,
       };
 
       const sale = await checkout(saleData);
@@ -96,7 +98,7 @@ const CartScreen: React.FC = () => {
 
         Alert.alert(
           'Order Queued Offline',
-          `Your order has been queued for processing when connection is restored.\n\nLocal ID: ${sale.id}\nTotal: ₹${totalAmount.toFixed(2)}\nPayment: ${paymentType.toUpperCase()}\n\n${queuedSalesCount + 1} order(s) pending sync.`,
+          `Your order has been queued for processing when connection is restored.\n\nLocal ID: ${sale.id}\nTotal: ₹${totalAmount.toFixed(2)}\nPayment: ${paymentType.toUpperCase()}\nStatus: ${isPaid ? 'Paid' : 'Pending'}\n\n${queuedSalesCount + 1} order(s) pending sync.`,
           [
             { text: 'OK' },
             ...(isOnline ? [] : [
@@ -119,7 +121,7 @@ const CartScreen: React.FC = () => {
 
         Alert.alert(
           'Order Placed!',
-          `Your order has been placed successfully.\n\nSale ID: ${sale.id}\nTotal: ₹${totalAmount.toFixed(2)}\nPayment: ${paymentType.toUpperCase()}`,
+          `Your order has been placed successfully.\n\nSale ID: ${sale.id}\nTotal: ₹${totalAmount.toFixed(2)}\nPayment: ${paymentType.toUpperCase()}\nStatus: ${isPaid ? 'Paid' : 'Pending'}`,
           [{ text: 'OK' }]
         );
       }
@@ -234,6 +236,44 @@ const CartScreen: React.FC = () => {
                     ]}
                   >
                     UPI
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+
+            <View style={styles.paymentStatusSection}>
+              <Text style={styles.paymentTypeLabel}>Payment Status:</Text>
+              <View style={styles.paymentTypeButtons}>
+                <TouchableOpacity
+                  style={[
+                    styles.paymentTypeButton,
+                    !isPaid && styles.paymentTypeButtonActive,
+                  ]}
+                  onPress={() => setIsPaid(false)}
+                >
+                  <Text
+                    style={[
+                      styles.paymentTypeButtonText,
+                      !isPaid && styles.paymentTypeButtonTextActive,
+                    ]}
+                  >
+                    Pending
+                  </Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[
+                    styles.paymentTypeButton,
+                    isPaid && styles.paymentTypeButtonActive,
+                  ]}
+                  onPress={() => setIsPaid(true)}
+                >
+                  <Text
+                    style={[
+                      styles.paymentTypeButtonText,
+                      isPaid && styles.paymentTypeButtonTextActive,
+                    ]}
+                  >
+                    Paid
                   </Text>
                 </TouchableOpacity>
               </View>
@@ -422,6 +462,9 @@ const styles = StyleSheet.create({
     elevation: 3,
   },
   paymentTypeSection: {
+    marginBottom: 16,
+  },
+  paymentStatusSection: {
     marginBottom: 16,
   },
   paymentTypeLabel: {

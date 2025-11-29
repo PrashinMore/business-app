@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   View,
   Text,
@@ -19,8 +19,11 @@ import {
   getProducts,
   createProduct,
   updateProduct,
+  getProductSuggestions,
+  checkDuplicate,
   CreateProductData,
   UpdateProductData,
+  DuplicateCheckResult,
 } from '../services/products';
 import { useCategories } from '../hooks/useCategories';
 import { Category } from '../types/categories';
@@ -41,6 +44,15 @@ const ProductFormScreen: React.FC = () => {
   const [image, setImage] = useState<any>(null);
   const [existingImageUrl, setExistingImageUrl] = useState<string | null>(null);
   const [categoryModalVisible, setCategoryModalVisible] = useState(false);
+  const [nameSuggestions, setNameSuggestions] = useState<string[]>([]);
+  const [showSuggestions, setShowSuggestions] = useState(false);
+  const [loadingSuggestions, setLoadingSuggestions] = useState(false);
+  const debounceTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const [duplicateWarning, setDuplicateWarning] = useState<{
+    message: string;
+    similarProduct: { id: string; name: string };
+  } | null>(null);
+  const [checkingDuplicate, setCheckingDuplicate] = useState(false);
 
   const [formData, setFormData] = useState({
     name: '',
@@ -54,6 +66,78 @@ const ProductFormScreen: React.FC = () => {
 
   // Fetch categories
   const { categories, loading: categoriesLoading } = useCategories({ autoLoad: true });
+
+  // Fetch name suggestions with debouncing
+  const fetchNameSuggestions = useCallback(async (query: string) => {
+    if (!query.trim() || query.trim().length < 2) {
+      setNameSuggestions([]);
+      setShowSuggestions(false);
+      return;
+    }
+
+    // Clear previous timer
+    if (debounceTimerRef.current) {
+      clearTimeout(debounceTimerRef.current);
+    }
+
+    // Set loading state
+    setLoadingSuggestions(true);
+
+    // Debounce: wait 300ms after user stops typing
+    debounceTimerRef.current = setTimeout(async () => {
+      try {
+        const results = await getProductSuggestions(query.trim(), 10);
+        const names = results.map(r => r.name);
+        setNameSuggestions(names);
+        setShowSuggestions(names.length > 0);
+      } catch (err) {
+        console.error('Failed to fetch suggestions:', err);
+        setNameSuggestions([]);
+        setShowSuggestions(false);
+      } finally {
+        setLoadingSuggestions(false);
+      }
+    }, 300);
+  }, []);
+
+  // Check for duplicate product name on blur
+  const handleNameBlur = useCallback(async () => {
+    const productName = formData.name.trim();
+    
+    if (!productName || productName.length < 2) {
+      setDuplicateWarning(null);
+      return;
+    }
+
+    try {
+      setCheckingDuplicate(true);
+      const result = await checkDuplicate(productName, productId || undefined);
+      
+      if (result.isDuplicate && result.similarProduct) {
+        setDuplicateWarning({
+          message: result.message || 'A product with a similar name may already exist',
+          similarProduct: result.similarProduct,
+        });
+      } else {
+        setDuplicateWarning(null);
+      }
+    } catch (err) {
+      console.error('Failed to check duplicate:', err);
+      // Don't show error to user, just silently fail
+      setDuplicateWarning(null);
+    } finally {
+      setCheckingDuplicate(false);
+    }
+  }, [formData.name, productId]);
+
+  // Cleanup timer on unmount
+  useEffect(() => {
+    return () => {
+      if (debounceTimerRef.current) {
+        clearTimeout(debounceTimerRef.current);
+      }
+    };
+  }, []);
 
   useEffect(() => {
     if (productId) {
@@ -170,11 +254,13 @@ const ProductFormScreen: React.FC = () => {
 
       if (productId) {
         await updateProduct(productId, productData, image || undefined);
+        setDuplicateWarning(null); // Clear warning on success
         Alert.alert('Success', 'Product updated successfully', [
           { text: 'OK', onPress: () => navigation.goBack() },
         ]);
       } else {
         await createProduct(productData, image || undefined);
+        setDuplicateWarning(null); // Clear warning on success
         Alert.alert('Success', 'Product created successfully', [
           { text: 'OK', onPress: () => navigation.goBack() },
         ]);
@@ -227,15 +313,100 @@ const ProductFormScreen: React.FC = () => {
         )}
 
         <Text style={styles.label}>Product Name *</Text>
-        <TextInput
-          style={styles.input}
-          value={formData.name}
-          onChangeText={(text) => setFormData({ ...formData, name: text })}
-          placeholder="Enter product name"
-          placeholderTextColor="#999"
-        />
+        <View style={styles.nameInputContainer}>
+          <TextInput
+            style={[
+              styles.input,
+              duplicateWarning && styles.inputWarning,
+            ]}
+            value={formData.name}
+            onChangeText={(text) => {
+              setFormData({ ...formData, name: text });
+              fetchNameSuggestions(text);
+              // Clear warning when user starts typing again
+              if (duplicateWarning) {
+                setDuplicateWarning(null);
+              }
+            }}
+            onFocus={() => {
+              if (nameSuggestions.length > 0) {
+                setShowSuggestions(true);
+              }
+            }}
+            onBlur={() => {
+              // Delay to allow click on suggestion
+              setTimeout(() => {
+                setShowSuggestions(false);
+                // Check for duplicate after suggestions are hidden
+                handleNameBlur();
+              }, 200);
+            }}
+            placeholder="Enter product name"
+            placeholderTextColor="#999"
+          />
+          {loadingSuggestions && (
+            <View style={styles.loadingIndicator}>
+              <ActivityIndicator size="small" color="#007AFF" />
+            </View>
+          )}
+          
+          {/* Suggestions Dropdown */}
+          {showSuggestions && nameSuggestions.length > 0 && (
+            <View style={styles.suggestionsContainer}>
+              <FlatList
+                data={nameSuggestions}
+                keyExtractor={(item, index) => `suggestion-${index}`}
+                renderItem={({ item, index }) => (
+                  <TouchableOpacity
+                    style={[
+                      styles.suggestionItem,
+                      index === nameSuggestions.length - 1 && styles.suggestionItemLast,
+                    ]}
+                    onPress={() => {
+                      setFormData({ ...formData, name: item });
+                      setNameSuggestions([]);
+                      setShowSuggestions(false);
+                    }}
+                  >
+                    <Text style={styles.suggestionText}>{item}</Text>
+                  </TouchableOpacity>
+                )}
+                nestedScrollEnabled={true}
+              />
+            </View>
+          )}
+        </View>
 
-        <Text style={styles.label}>Category *</Text>
+        {/* Duplicate Warning */}
+        {duplicateWarning && (
+          <View style={styles.duplicateWarningContainer}>
+            <Text style={styles.duplicateWarningText}>
+              ⚠️ {duplicateWarning.message}
+            </Text>
+            <Text style={styles.duplicateWarningSubtext}>
+              Similar product found: <Text style={styles.duplicateWarningBold}>{duplicateWarning.similarProduct.name}</Text>
+            </Text>
+            <TouchableOpacity
+              style={styles.useNameButton}
+              onPress={() => {
+                setFormData({ ...formData, name: duplicateWarning.similarProduct.name });
+                setDuplicateWarning(null);
+              }}
+            >
+              <Text style={styles.useNameButtonText}>Use this name instead</Text>
+            </TouchableOpacity>
+          </View>
+        )}
+
+        {checkingDuplicate && (
+          <View style={styles.checkingDuplicateContainer}>
+            <ActivityIndicator size="small" color="#007AFF" />
+            <Text style={styles.checkingDuplicateText}>Checking for duplicates...</Text>
+          </View>
+        )}
+
+        <View style={styles.categorySection}>
+          <Text style={styles.label}>Category *</Text>
         <TouchableOpacity
           style={styles.dropdown}
           onPress={() => setCategoryModalVisible(true)}
@@ -315,6 +486,7 @@ const ProductFormScreen: React.FC = () => {
             </View>
           </View>
         </Modal>
+        </View>
 
         <View style={styles.row}>
           <View style={styles.halfWidth}>
@@ -417,6 +589,10 @@ const styles = StyleSheet.create({
     marginBottom: 8,
     marginTop: 16,
   },
+  categorySection: {
+    zIndex: 1,
+    marginTop: 8,
+  },
   input: {
     backgroundColor: '#fff',
     borderRadius: 8,
@@ -424,6 +600,10 @@ const styles = StyleSheet.create({
     fontSize: 16,
     borderWidth: 1,
     borderColor: '#ddd',
+  },
+  inputWarning: {
+    borderColor: '#ffc107',
+    backgroundColor: '#fffbf0',
   },
   row: {
     flexDirection: 'row',
@@ -604,6 +784,92 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#999',
     textAlign: 'center',
+  },
+  nameInputContainer: {
+    position: 'relative',
+    zIndex: 100,
+    marginBottom: 4,
+  },
+  loadingIndicator: {
+    position: 'absolute',
+    right: 12,
+    top: 12,
+  },
+  suggestionsContainer: {
+    position: 'absolute',
+    top: '100%',
+    left: 0,
+    right: 0,
+    backgroundColor: '#fff',
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#ddd',
+    maxHeight: 200,
+    zIndex: 9999,
+    marginTop: 4,
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 4,
+    },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 15,
+    overflow: 'hidden',
+  },
+  suggestionItem: {
+    padding: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f0f0f0',
+  },
+  suggestionItemLast: {
+    borderBottomWidth: 0,
+  },
+  suggestionText: {
+    fontSize: 16,
+    color: '#333',
+  },
+  duplicateWarningContainer: {
+    marginTop: 8,
+    padding: 12,
+    backgroundColor: '#fff3cd',
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#ffc107',
+  },
+  duplicateWarningText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#856404',
+    marginBottom: 4,
+  },
+  duplicateWarningSubtext: {
+    fontSize: 14,
+    color: '#856404',
+    marginBottom: 8,
+  },
+  duplicateWarningBold: {
+    fontWeight: 'bold',
+  },
+  useNameButton: {
+    alignSelf: 'flex-start',
+  },
+  useNameButtonText: {
+    fontSize: 14,
+    color: '#e65100',
+    textDecorationLine: 'underline',
+    fontWeight: '600',
+  },
+  checkingDuplicateContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 8,
+    padding: 8,
+  },
+  checkingDuplicateText: {
+    fontSize: 12,
+    color: '#666',
+    marginLeft: 8,
   },
 });
 
