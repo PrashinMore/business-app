@@ -6,7 +6,9 @@ import {
   logout as authLogout, 
   getCurrentUser,
   getStoredUser,
-  isAuthenticated as checkAuth
+  isAuthenticated as checkAuth,
+  refreshTokens,
+  getRefreshToken
 } from '../services/auth';
 
 interface AuthContextType {
@@ -41,17 +43,37 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         const storedUser = await getStoredUser();
         if (storedUser) {
           setUser(storedUser);
-          // Optionally refresh user data from server
+          // Try to refresh user data from server
           try {
             const freshUser = await getCurrentUser();
             setUser(freshUser);
           } catch (error: any) {
-            // Silently handle session expiration during initial load
-            // This is expected if token is expired or invalid
+            // If access token expired, try to refresh using refresh token
             if (error?.message?.includes('Session expired') || error?.message?.includes('No token found')) {
-              // Clear invalid token and user data
-              await authLogout();
-              setUser(null);
+              const refreshToken = await getRefreshToken();
+              if (refreshToken) {
+                try {
+                  // Attempt to refresh tokens
+                  const refreshed = await refreshTokens(refreshToken);
+                  setUser(refreshed.user);
+                  // Try to get fresh user data with new token
+                  try {
+                    const freshUser = await getCurrentUser();
+                    setUser(freshUser);
+                  } catch (getUserError) {
+                    // Even if getCurrentUser fails, we have the user from refresh response
+                    console.warn('Failed to get fresh user data after refresh:', getUserError);
+                  }
+                } catch (refreshError) {
+                  // Refresh token expired or invalid - logout user
+                  await authLogout();
+                  setUser(null);
+                }
+              } else {
+                // No refresh token available - logout
+                await authLogout();
+                setUser(null);
+              }
             } else {
               // Only log unexpected errors
               console.error('Failed to refresh user data:', error);

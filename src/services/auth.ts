@@ -37,8 +37,9 @@ export async function login(email: string, password: string): Promise<AuthTokenR
       throw new Error(data.message || 'Login failed');
     }
 
-    // Store token and user data
+    // Store tokens and user data
     await AsyncStorage.setItem('accessToken', data.accessToken);
+    await AsyncStorage.setItem('refreshToken', data.refreshToken);
     await AsyncStorage.setItem('user', JSON.stringify(data.user));
 
     return data as AuthTokenResponse;
@@ -75,13 +76,47 @@ export async function signup(name: string, email: string, password: string): Pro
       throw new Error(data.message || 'Signup failed');
     }
 
-    // Store token and user data
+    // Store tokens and user data
     await AsyncStorage.setItem('accessToken', data.accessToken);
+    await AsyncStorage.setItem('refreshToken', data.refreshToken);
     await AsyncStorage.setItem('user', JSON.stringify(data.user));
 
     return data as AuthTokenResponse;
   } catch (error) {
     console.error('Signup error:', error);
+    throw error;
+  }
+}
+
+/**
+ * Refresh access token using refresh token
+ * @param refreshToken - Refresh token string
+ * @returns Promise with new access token, refresh token, and user data
+ */
+export async function refreshTokens(refreshToken: string): Promise<AuthTokenResponse> {
+  try {
+    const response = await fetch(`${API_BASE_URL}/auth/refresh`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ refreshToken }),
+    });
+
+    const data = await response.json();
+
+    if (!response.ok) {
+      throw new Error(data.message || 'Token refresh failed');
+    }
+
+    // Store new tokens and user data
+    await AsyncStorage.setItem('accessToken', data.accessToken);
+    await AsyncStorage.setItem('refreshToken', data.refreshToken);
+    await AsyncStorage.setItem('user', JSON.stringify(data.user));
+
+    return data as AuthTokenResponse;
+  } catch (error) {
+    console.error('Refresh token error:', error);
     throw error;
   }
 }
@@ -110,7 +145,31 @@ export async function getCurrentUser(): Promise<User> {
 
     if (!response.ok) {
       if (response.status === 401) {
-        // Token expired or invalid
+        // Token expired - try to refresh
+        const storedRefreshToken = await AsyncStorage.getItem('refreshToken');
+        if (storedRefreshToken) {
+          try {
+            const refreshed = await refreshTokens(storedRefreshToken);
+            // Retry the request with new token
+            const retryResponse = await fetch(`${API_BASE_URL}/users/me`, {
+              method: 'GET',
+              headers: {
+                'Authorization': `Bearer ${refreshed.accessToken}`,
+                'Content-Type': 'application/json',
+              },
+            });
+            const retryData = await retryResponse.json();
+            if (retryResponse.ok) {
+              await AsyncStorage.setItem('user', JSON.stringify(retryData));
+              return retryData as User;
+            }
+          } catch (refreshError) {
+            // Refresh failed - logout user
+            await logout();
+            throw new Error('Session expired. Please login again.');
+          }
+        }
+        // No refresh token or refresh failed
         await logout();
         throw new Error('Session expired. Please login again.');
       }
@@ -177,10 +236,11 @@ export async function resetPassword(
 
 /**
  * Logout user
- * Clears stored token and user data
+ * Clears stored tokens and user data
  */
 export async function logout(): Promise<void> {
   await AsyncStorage.removeItem('accessToken');
+  await AsyncStorage.removeItem('refreshToken');
   await AsyncStorage.removeItem('user');
 }
 
@@ -194,11 +254,19 @@ export async function isAuthenticated(): Promise<boolean> {
 }
 
 /**
- * Get stored token
+ * Get stored access token
  * @returns Promise<string | null>
  */
 export async function getToken(): Promise<string | null> {
   return await AsyncStorage.getItem('accessToken');
+}
+
+/**
+ * Get stored refresh token
+ * @returns Promise<string | null>
+ */
+export async function getRefreshToken(): Promise<string | null> {
+  return await AsyncStorage.getItem('refreshToken');
 }
 
 /**
@@ -212,14 +280,14 @@ export async function getStoredUser(): Promise<User | null> {
 
 /**
  * Make authenticated API request
- * Automatically adds Authorization header
+ * Automatically adds Authorization header and handles token refresh
  * 
  * @param endpoint - API endpoint (e.g., '/products')
  * @param options - Fetch options
  * @returns Promise<Response>
  */
 export async function apiRequest(endpoint: string, options: RequestInit = {}): Promise<Response> {
-  const token = await AsyncStorage.getItem('accessToken');
+  let token = await AsyncStorage.getItem('accessToken');
 
   if (!token) {
     throw new Error('No token found. Please login.');
@@ -229,7 +297,7 @@ export async function apiRequest(endpoint: string, options: RequestInit = {}): P
     ? endpoint
     : `${API_BASE_URL}${endpoint}`;
 
-  const response = await fetch(url, {
+  let response = await fetch(url, {
     ...options,
     headers: {
       'Authorization': `Bearer ${token}`,
@@ -238,10 +306,40 @@ export async function apiRequest(endpoint: string, options: RequestInit = {}): P
     },
   });
 
-  // Handle token expiration
+  // Handle token expiration - try to refresh
   if (response.status === 401) {
-    await logout();
-    throw new Error('Session expired. Please login again.');
+    const refreshToken = await AsyncStorage.getItem('refreshToken');
+    if (refreshToken) {
+      try {
+        // Attempt to refresh tokens
+        const refreshed = await refreshTokens(refreshToken);
+        token = refreshed.accessToken;
+
+        // Retry the original request with new token
+        response = await fetch(url, {
+          ...options,
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json',
+            ...options.headers,
+          },
+        });
+
+        // If still 401 after refresh, logout
+        if (response.status === 401) {
+          await logout();
+          throw new Error('Session expired. Please login again.');
+        }
+      } catch (refreshError) {
+        // Refresh failed - logout user
+        await logout();
+        throw new Error('Session expired. Please login again.');
+      }
+    } else {
+      // No refresh token available
+      await logout();
+      throw new Error('Session expired. Please login again.');
+    }
   }
 
   return response;
