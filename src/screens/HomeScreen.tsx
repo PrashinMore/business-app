@@ -10,20 +10,13 @@ import {
   Alert,
   Image,
 } from 'react-native';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useAuth } from '../context/AuthContext';
 import { useCart } from '../context/CartContext';
-import { loadAllDashboardData, getSalesTrend } from '../services/dashboard';
+import { useData } from '../context/DataContext';
 import { RootStackParamList } from '../navigation/AppNavigator';
-import {
-  DashboardSummary,
-  SalesTrendData,
-  TopProduct,
-  LowStockItem,
-  ExpenseSummary,
-  SalesTrendRange,
-} from '../types/dashboard';
+import { SalesTrendRange } from '../types/dashboard';
 import { API_BASE_URL } from '../config/api';
 
 type HomeScreenNavigationProp = NativeStackNavigationProp<RootStackParamList>;
@@ -32,55 +25,36 @@ const HomeScreen: React.FC = () => {
   const navigation = useNavigation<HomeScreenNavigationProp>();
   const { user } = useAuth();
   const { getCartItemCount, getTotalAmount } = useCart();
+  const { dashboard, dashboardLoading, dashboardRefreshing, loadDashboard } = useData();
   
-  const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
-  const [summary, setSummary] = useState<DashboardSummary | null>(null);
-  const [salesTrend, setSalesTrend] = useState<SalesTrendData[]>([]);
-  const [topProducts, setTopProducts] = useState<TopProduct[]>([]);
-  const [lowStock, setLowStock] = useState<LowStockItem[]>([]);
-  const [expensesSummary, setExpensesSummary] = useState<ExpenseSummary[]>([]);
   const [trendRange, setTrendRange] = useState<SalesTrendRange>('7days');
 
   const cartItemCount = getCartItemCount();
   const cartTotal = getTotalAmount();
 
+  // Load dashboard on mount and when trend range changes
   useEffect(() => {
-    loadDashboard();
+    loadDashboard(trendRange);
   }, [trendRange]);
 
-  const loadDashboard = async () => {
-    try {
-      setLoading(true);
-      const data = await loadAllDashboardData(trendRange);
-      setSummary(data.summary);
-      setSalesTrend(data.salesTrend);
-      setTopProducts(data.topProducts);
-      setLowStock(data.lowStock);
-      setExpensesSummary(data.expensesSummary);
-    } catch (error: any) {
-      Alert.alert('Error', error.message || 'Failed to load dashboard data');
-    } finally {
-      setLoading(false);
-    }
-  };
+  // Refresh when screen comes into focus
+  useFocusEffect(
+    React.useCallback(() => {
+      // Only refresh if we have data (not initial load)
+      if (dashboard.summary) {
+        loadDashboard(trendRange);
+      }
+    }, [trendRange])
+  );
 
   const handleRefresh = async () => {
-    setRefreshing(true);
-    try {
-      const trendData = await getSalesTrend(trendRange);
-      setSalesTrend(trendData);
-      const data = await loadAllDashboardData(trendRange);
-      setSummary(data.summary);
-      setTopProducts(data.topProducts);
-      setLowStock(data.lowStock);
-      setExpensesSummary(data.expensesSummary);
-    } catch (error: any) {
-      Alert.alert('Error', error.message || 'Failed to refresh dashboard data');
-    } finally {
-      setRefreshing(false);
-    }
+    await loadDashboard(trendRange, true);
   };
+
+  // Extract data from context
+  const { summary, salesTrend, topProducts, lowStock, expensesSummary } = dashboard;
+  const loading = dashboardLoading;
+  const refreshing = dashboardRefreshing;
 
   const getMaxSalesValue = () => {
     if (salesTrend.length === 0) return 100;

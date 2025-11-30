@@ -15,6 +15,7 @@ import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useCart } from '../context/CartContext';
 import { useAuth } from '../context/AuthContext';
 import { useSync } from '../context/SyncContext';
+import { useData } from '../context/DataContext';
 import { checkout } from '../services/menu';
 import { CartItem } from '../types/menu';
 import { API_BASE_URL } from '../config/api';
@@ -28,6 +29,7 @@ const CartScreen: React.FC = () => {
   const { cart, updateQuantity, removeFromCart, clearCart, getTotalAmount } = useCart();
   const { user } = useAuth();
   const { isOnline, queuedSalesCount, manualSync } = useSync();
+  const { onSaleCreated } = useData();
   const [checkingOut, setCheckingOut] = useState(false);
   const [paymentType, setPaymentType] = useState<'cash' | 'UPI'>('cash');
   const [isPaid, setIsPaid] = useState(false);
@@ -110,6 +112,9 @@ const CartScreen: React.FC = () => {
         // Clear cart on success (even if offline)
         clearCart();
 
+        // Trigger data refresh for offline sale too (stock changed locally)
+        onSaleCreated();
+
         Alert.alert(
           'Order Queued Offline',
           `Your order has been queued for processing when connection is restored.\n\nLocal ID: ${sale.id}\nTotal: ₹${totalAmount.toFixed(2)}\nPayment: ${paymentType.toUpperCase()}\nStatus: ${isPaid ? 'Paid' : 'Pending'}\n\n${queuedSalesCount + 1} order(s) pending sync.`,
@@ -151,6 +156,9 @@ const CartScreen: React.FC = () => {
 
         // Clear cart on success (online sale)
         clearCart();
+
+        // Trigger data refresh (dashboard, sales list, menu stock)
+        onSaleCreated();
 
         // Check if user wanted to print immediately
         if (printAfterCheckoutRef.current) {

@@ -15,6 +15,7 @@ import {
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useAuth } from '../context/AuthContext';
+import { useData } from '../context/DataContext';
 import { getLowStockProducts, adjustStock, getProducts } from '../services/products';
 import { Product } from '../types/menu';
 import { RootStackParamList } from '../navigation/AppNavigator';
@@ -24,6 +25,7 @@ type InventoryScreenNavigationProp = NativeStackNavigationProp<RootStackParamLis
 const InventoryScreen: React.FC = () => {
   const navigation = useNavigation<InventoryScreenNavigationProp>();
   const { user } = useAuth();
+  const { onStockUpdated } = useData();
   const [lowStockProducts, setLowStockProducts] = useState<Product[]>([]);
   const [allProducts, setAllProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
@@ -95,6 +97,10 @@ const InventoryScreen: React.FC = () => {
       setAdjustModalVisible(false);
       setSelectedProduct(null);
       setAdjustmentValue('');
+      
+      // Trigger data refresh across the app (dashboard, menu, etc.)
+      onStockUpdated();
+      
       await loadData();
     } catch (error: any) {
       Alert.alert('Error', error.message || 'Failed to adjust stock');

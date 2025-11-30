@@ -15,6 +15,7 @@ import {
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useAuth } from '../context/AuthContext';
+import { useData } from '../context/DataContext';
 import {
   getProducts,
   createProduct,
@@ -37,6 +38,7 @@ const ProductFormScreen: React.FC = () => {
   const navigation = useNavigation<ProductFormScreenNavigationProp>();
   const route = useRoute<ProductFormScreenRouteProp>();
   const { user } = useAuth();
+  const { onProductUpdated } = useData();
   const productId = route.params?.productId;
 
   const [loading, setLoading] = useState(false);
@@ -255,12 +257,16 @@ const ProductFormScreen: React.FC = () => {
       if (productId) {
         await updateProduct(productId, productData, image || undefined);
         setDuplicateWarning(null); // Clear warning on success
+        // Trigger data refresh across the app
+        onProductUpdated();
         Alert.alert('Success', 'Product updated successfully', [
           { text: 'OK', onPress: () => navigation.goBack() },
         ]);
       } else {
         await createProduct(productData, image || undefined);
         setDuplicateWarning(null); // Clear warning on success
+        // Trigger data refresh across the app
+        onProductUpdated();
         Alert.alert('Success', 'Product created successfully', [
           { text: 'OK', onPress: () => navigation.goBack() },
         ]);

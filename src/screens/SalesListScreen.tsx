@@ -12,20 +12,17 @@ import {
   ScrollView,
   Platform,
 } from 'react-native';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import DateTimePickerModal from 'react-native-modal-datetime-picker';
-import { listSales, getPaymentTypeTotals } from '../services/sales';
+import { useData } from '../context/DataContext';
 import { Sale, SalesFilters, PaymentTypeTotals } from '../types/sales';
 import { RootStackParamList } from '../navigation/AppNavigator';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 
 const SalesListScreen: React.FC = () => {
   const navigation = useNavigation<any>();
+  const { salesData, salesLoading, salesRefreshing, loadSales } = useData();
   
-  const [sales, setSales] = useState<Sale[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
-  const [paymentTotals, setPaymentTotals] = useState<PaymentTypeTotals | null>(null);
   const [showFilters, setShowFilters] = useState(false);
 
   // Filter states
@@ -39,46 +36,45 @@ const SalesListScreen: React.FC = () => {
   const [isFromDatePickerVisible, setFromDatePickerVisible] = useState(false);
   const [isToDatePickerVisible, setToDatePickerVisible] = useState(false);
 
+  // Build filters object
+  const buildFilters = (): SalesFilters => {
+    const filters: SalesFilters = {};
+    if (fromDate) filters.from = fromDate;
+    if (toDate) filters.to = toDate;
+    if (productId) filters.productId = productId;
+    if (staff) filters.staff = staff;
+    if (paymentType) filters.paymentType = paymentType;
+    return filters;
+  };
+
+  // Initial load
   useEffect(() => {
-    loadSales();
+    loadSales(buildFilters());
   }, []);
 
-  const loadSales = async () => {
-    try {
-      setLoading(true);
+  // Refresh when screen comes into focus
+  useFocusEffect(
+    React.useCallback(() => {
+      // Only refresh if we have data (not initial load)
+      if (salesData.sales.length > 0 || salesData.paymentTotals) {
+        loadSales(buildFilters());
+      }
+    }, [fromDate, toDate, productId, staff, paymentType])
+  );
 
-      const filters: SalesFilters = {};
-      if (fromDate) filters.from = fromDate;
-      if (toDate) filters.to = toDate;
-      if (productId) filters.productId = productId;
-      if (staff) filters.staff = staff;
-      if (paymentType) filters.paymentType = paymentType;
-
-      // Load sales and payment totals in parallel
-      const [salesData, totalsData] = await Promise.all([
-        listSales(filters),
-        getPaymentTypeTotals({
-          from: fromDate || undefined,
-          to: toDate || undefined,
-          productId: productId || undefined,
-          staff: staff || undefined,
-        }),
-      ]);
-
-      setSales(salesData);
-      setPaymentTotals(totalsData);
-    } catch (error: any) {
-      Alert.alert('Error', error.message || 'Failed to load sales');
-    } finally {
-      setLoading(false);
-    }
+  const handleLoadSales = async () => {
+    await loadSales(buildFilters());
   };
 
   const handleRefresh = async () => {
-    setRefreshing(true);
-    await loadSales();
-    setRefreshing(false);
+    await loadSales(buildFilters(), true);
   };
+
+  // Extract data from context
+  const sales = salesData.sales;
+  const paymentTotals = salesData.paymentTotals;
+  const loading = salesLoading;
+  const refreshing = salesRefreshing;
 
   const resetFilters = () => {
     setFromDate('');
@@ -88,7 +84,8 @@ const SalesListScreen: React.FC = () => {
     setPaymentType('');
     setFromDatePickerVisible(false);
     setToDatePickerVisible(false);
-    setTimeout(() => loadSales(), 100);
+    // Load with empty filters after state updates
+    setTimeout(() => loadSales({}), 100);
   };
 
   const showFromDatePicker = () => {
@@ -278,7 +275,7 @@ const SalesListScreen: React.FC = () => {
           </View>
 
           <View style={styles.filterActions}>
-            <TouchableOpacity style={styles.applyButton} onPress={loadSales}>
+            <TouchableOpacity style={styles.applyButton} onPress={handleLoadSales}>
               <Text style={styles.applyButtonText}>Apply Filters</Text>
             </TouchableOpacity>
             <TouchableOpacity style={styles.resetButton} onPress={resetFilters}>
