@@ -20,6 +20,7 @@ import CategoriesListScreen from '../screens/CategoriesListScreen';
 import CategoryFormScreen from '../screens/CategoryFormScreen';
 import CategoryDetailsScreen from '../screens/CategoryDetailsScreen';
 import InvitesScreen from '../screens/InvitesScreen';
+import PrintBillScreen, { BillData } from '../screens/PrintBillScreen';
 import MainTabNavigator from './MainTabNavigator';
 
 export type RootStackParamList = {
@@ -28,6 +29,7 @@ export type RootStackParamList = {
   MainTabs: undefined;
   ResetPassword: undefined;
   SaleDetails: { saleId: string };
+  PrintBill: { billData: BillData };
   ProductsList: undefined;
   ProductForm: { productId?: string } | undefined;
   Inventory: undefined;
@@ -113,6 +115,11 @@ const AppNavigator: React.FC = () => {
           name="SaleDetails" 
           component={SaleDetailsScreen}
           options={{ headerShown: true, title: 'Sale Details' }}
+        />
+        <Stack.Screen 
+          name="PrintBill" 
+          component={PrintBillScreen}
+          options={{ headerShown: true, title: 'Print Receipt' }}
         />
         <Stack.Screen 
           name="ProductsList" 

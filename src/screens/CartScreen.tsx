@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import {
   View,
   Text,
@@ -10,20 +10,30 @@ import {
   ScrollView,
   Image,
 } from 'react-native';
+import { useNavigation } from '@react-navigation/native';
+import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useCart } from '../context/CartContext';
 import { useAuth } from '../context/AuthContext';
 import { useSync } from '../context/SyncContext';
 import { checkout } from '../services/menu';
 import { CartItem } from '../types/menu';
 import { API_BASE_URL } from '../config/api';
+import { RootStackParamList } from '../navigation/AppNavigator';
+import { BillData, BillItem } from './PrintBillScreen';
+
+type CartScreenNavigationProp = NativeStackNavigationProp<RootStackParamList>;
 
 const CartScreen: React.FC = () => {
+  const navigation = useNavigation<CartScreenNavigationProp>();
   const { cart, updateQuantity, removeFromCart, clearCart, getTotalAmount } = useCart();
   const { user } = useAuth();
   const { isOnline, queuedSalesCount, manualSync } = useSync();
   const [checkingOut, setCheckingOut] = useState(false);
   const [paymentType, setPaymentType] = useState<'cash' | 'UPI'>('cash');
   const [isPaid, setIsPaid] = useState(false);
+  
+  // Ref to track if we should print after checkout
+  const printAfterCheckoutRef = useRef(false);
 
   const handleUpdateQuantity = (productId: string, change: number) => {
     const cartItem = cart.find(item => item.productId === productId);
@@ -91,6 +101,10 @@ const CartScreen: React.FC = () => {
 
       const sale = await checkout(saleData);
 
+      // Store sale data before clearing cart for printing
+      const saleId = sale.id;
+      const saleDate = saleData.date;
+
       // Check if sale was queued offline
       if ('offline' in sale && sale.offline) {
         // Clear cart on success (even if offline)
@@ -116,20 +130,62 @@ const CartScreen: React.FC = () => {
           ]
         );
       } else {
+        // Store items for printing before clearing cart
+        const printBillItems: BillItem[] = cart.map(item => ({
+          name: item.product.name,
+          quantity: item.quantity,
+          price: Number(item.sellingPrice),
+          subtotal: Number(item.sellingPrice) * item.quantity,
+        }));
+
+        const printBillData: BillData = {
+          saleId,
+          date: saleDate,
+          items: printBillItems,
+          subtotal: totalAmount,
+          totalAmount,
+          paymentType,
+          isPaid,
+          cashierName: user?.name,
+        };
+
         // Clear cart on success (online sale)
         clearCart();
 
-        Alert.alert(
-          'Order Placed!',
-          `Your order has been placed successfully.\n\nSale ID: ${sale.id}\nTotal: ₹${totalAmount.toFixed(2)}\nPayment: ${paymentType.toUpperCase()}\nStatus: ${isPaid ? 'Paid' : 'Pending'}`,
-          [{ text: 'OK' }]
-        );
+        // Check if user wanted to print immediately
+        if (printAfterCheckoutRef.current) {
+          printAfterCheckoutRef.current = false; // Reset the flag
+          // Navigate directly to print screen
+          navigation.navigate('PrintBill', { billData: printBillData });
+        } else {
+          // Show alert with print option
+          Alert.alert(
+            'Order Placed! 🎉',
+            `Your order has been placed successfully.\n\nSale ID: ${sale.id.substring(0, 8).toUpperCase()}\nTotal: ₹${totalAmount.toFixed(2)}\nPayment: ${paymentType.toUpperCase()}\nStatus: ${isPaid ? 'Paid' : 'Pending'}`,
+            [
+              { text: 'Done', style: 'cancel' },
+              {
+                text: '🖨️ Print Bill',
+                onPress: () => {
+                  navigation.navigate('PrintBill', { billData: printBillData });
+                },
+              },
+            ]
+          );
+        }
       }
     } catch (error: any) {
+      printAfterCheckoutRef.current = false; // Reset on error
       Alert.alert('Checkout Failed', error.message || 'An error occurred during checkout');
     } finally {
       setCheckingOut(false);
     }
+  };
+
+  // Handler for "Checkout & Print" button
+  const handleCheckoutAndPrint = () => {
+    printAfterCheckoutRef.current = true;
+    handleCheckout();
   };
 
   const renderCartItem = ({ item }: { item: CartItem }) => {
@@ -306,19 +362,52 @@ const CartScreen: React.FC = () => {
               </View>
             )}
 
-            <TouchableOpacity
-              style={[styles.checkoutButton, checkingOut && styles.checkoutButtonDisabled]}
-              onPress={handleCheckout}
-              disabled={checkingOut}
-            >
-              {checkingOut ? (
-                <ActivityIndicator color="#fff" />
-              ) : (
-                <Text style={styles.checkoutButtonText}>
-                  {isOnline ? 'Checkout' : 'Checkout (Offline)'}
-                </Text>
-              )}
-            </TouchableOpacity>
+            {/* Show two buttons when payment is marked as Paid */}
+            {isPaid ? (
+              <View style={styles.checkoutButtonsRow}>
+                <TouchableOpacity
+                  style={[styles.checkoutButton, styles.checkoutButtonSecondary, checkingOut && styles.checkoutButtonDisabled]}
+                  onPress={handleCheckout}
+                  disabled={checkingOut}
+                >
+                  {checkingOut && !printAfterCheckoutRef.current ? (
+                    <ActivityIndicator color="#007AFF" />
+                  ) : (
+                    <Text style={styles.checkoutButtonTextSecondary}>
+                      {isOnline ? 'Checkout' : 'Checkout (Offline)'}
+                    </Text>
+                  )}
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.checkoutButton, styles.checkoutButtonPrint, checkingOut && styles.checkoutButtonDisabled]}
+                  onPress={handleCheckoutAndPrint}
+                  disabled={checkingOut}
+                >
+                  {checkingOut && printAfterCheckoutRef.current ? (
+                    <ActivityIndicator color="#fff" />
+                  ) : (
+                    <>
+                      <Text style={styles.printIcon}>🖨️</Text>
+                      <Text style={styles.checkoutButtonText}>Checkout & Print</Text>
+                    </>
+                  )}
+                </TouchableOpacity>
+              </View>
+            ) : (
+              <TouchableOpacity
+                style={[styles.checkoutButton, checkingOut && styles.checkoutButtonDisabled]}
+                onPress={handleCheckout}
+                disabled={checkingOut}
+              >
+                {checkingOut ? (
+                  <ActivityIndicator color="#fff" />
+                ) : (
+                  <Text style={styles.checkoutButtonText}>
+                    {isOnline ? 'Checkout' : 'Checkout (Offline)'}
+                  </Text>
+                )}
+              </TouchableOpacity>
+            )}
           </View>
         }
       />
@@ -518,19 +607,45 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     color: '#007AFF',
   },
+  checkoutButtonsRow: {
+    flexDirection: 'row',
+    gap: 10,
+  },
   checkoutButton: {
     backgroundColor: '#007AFF',
     paddingVertical: 16,
     borderRadius: 8,
     alignItems: 'center',
+    flex: 1,
+  },
+  checkoutButtonSecondary: {
+    backgroundColor: '#fff',
+    borderWidth: 2,
+    borderColor: '#007AFF',
+    flex: 0.8,
+  },
+  checkoutButtonPrint: {
+    backgroundColor: '#1a1a2e',
+    flexDirection: 'row',
+    justifyContent: 'center',
+    gap: 6,
+    flex: 1.2,
   },
   checkoutButtonDisabled: {
     opacity: 0.6,
   },
   checkoutButtonText: {
     color: '#fff',
-    fontSize: 18,
+    fontSize: 16,
     fontWeight: 'bold',
+  },
+  checkoutButtonTextSecondary: {
+    color: '#007AFF',
+    fontSize: 16,
+    fontWeight: 'bold',
+  },
+  printIcon: {
+    fontSize: 16,
   },
   offlineBanner: {
     backgroundColor: '#fff3cd',

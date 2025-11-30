@@ -14,7 +14,9 @@ import { getSaleDetails, updateSalePayment } from '../services/sales';
 import { Sale } from '../types/sales';
 import { RootStackParamList } from '../navigation/AppNavigator';
 import { useProductNames } from '../hooks/useProductNames';
+import { useAuth } from '../context/AuthContext';
 import { TouchableOpacity } from 'react-native';
+import { BillData, BillItem } from './PrintBillScreen';
 
 type SaleDetailsScreenRouteProp = RouteProp<RootStackParamList, 'SaleDetails'>;
 type SaleDetailsScreenNavigationProp = NativeStackNavigationProp<RootStackParamList, 'SaleDetails'>;
@@ -23,6 +25,7 @@ const SaleDetailsScreen: React.FC = () => {
   const navigation = useNavigation<SaleDetailsScreenNavigationProp>();
   const route = useRoute<SaleDetailsScreenRouteProp>();
   const { saleId } = route.params;
+  const { user } = useAuth();
 
   const [sale, setSale] = useState<Sale | null>(null);
   const [loading, setLoading] = useState(true);
@@ -37,6 +40,31 @@ const SaleDetailsScreen: React.FC = () => {
     productIds,
     enabled: !!sale && productIds.length > 0,
   });
+
+  // Function to navigate to print bill screen
+  const handlePrintBill = () => {
+    if (!sale) return;
+
+    const billItems: BillItem[] = sale.items.map(item => ({
+      name: productNames.get(item.productId) || `Product ${item.productId.substring(0, 8)}`,
+      quantity: item.quantity,
+      price: Number(item.sellingPrice),
+      subtotal: Number(item.subtotal),
+    }));
+
+    const billData: BillData = {
+      saleId: sale.id,
+      date: sale.date,
+      items: billItems,
+      subtotal: Number(sale.totalAmount),
+      totalAmount: Number(sale.totalAmount),
+      paymentType: (sale.paymentType as 'cash' | 'UPI') || 'cash',
+      isPaid: sale.isPaid,
+      cashierName: user?.name,
+    };
+
+    navigation.navigate('PrintBill', { billData });
+  };
 
   useEffect(() => {
     loadSaleDetails();
@@ -283,6 +311,18 @@ const SaleDetailsScreen: React.FC = () => {
           </View>
         ))}
       </View>
+
+      {/* Print Bill Button */}
+      <TouchableOpacity
+        style={styles.printButton}
+        onPress={handlePrintBill}
+        disabled={productNamesLoading}
+      >
+        <Text style={styles.printButtonIcon}>🖨️</Text>
+        <Text style={styles.printButtonText}>
+          {productNamesLoading ? 'Loading...' : 'Print Receipt'}
+        </Text>
+      </TouchableOpacity>
     </ScrollView>
   );
 };
@@ -493,6 +533,34 @@ const styles = StyleSheet.create({
     color: '#ff3b30',
     textAlign: 'center',
     padding: 20,
+  },
+  printButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#1a1a2e',
+    paddingVertical: 16,
+    paddingHorizontal: 24,
+    borderRadius: 12,
+    marginTop: 8,
+    marginBottom: 16,
+    gap: 10,
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
+    shadowOpacity: 0.15,
+    shadowRadius: 4,
+    elevation: 4,
+  },
+  printButtonIcon: {
+    fontSize: 20,
+  },
+  printButtonText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#fff',
   },
 });
 
