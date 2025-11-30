@@ -12,12 +12,12 @@ export default function App() {
     <SafeAreaProvider>
       <AuthProvider>
         <DataProvider>
-          <CartProvider>
-            <SyncProvider>
-              <StatusBar style="auto" />
-              <AppNavigator />
-            </SyncProvider>
-          </CartProvider>
+        <CartProvider>
+          <SyncProvider>
+            <StatusBar style="auto" />
+            <AppNavigator />
+          </SyncProvider>
+        </CartProvider>
         </DataProvider>
       </AuthProvider>
     </SafeAreaProvider>
