@@ -12,29 +12,40 @@ import {
   TextInput,
   Modal,
 } from 'react-native';
+import { useFocusEffect } from '@react-navigation/native';
 import { useCart } from '../context/CartContext';
 import { useAuth } from '../context/AuthContext';
-import { getMenuItems } from '../services/menu';
-import { getProducts } from '../services/products';
+import { useData } from '../context/DataContext';
 import { Product } from '../types/menu';
 import { API_BASE_URL } from '../config/api';
 
 const MenuScreen: React.FC = () => {
-  const [menuItems, setMenuItems] = useState<Product[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
+  const { menuItems, menuLoading, menuRefreshing, loadMenu, categories, loadCategories } = useData();
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
-  const [categories, setCategories] = useState<string[]>([]);
   const [categoryModalVisible, setCategoryModalVisible] = useState(false);
   const [debounceTimer, setDebounceTimer] = useState<ReturnType<typeof setTimeout> | null>(null);
   const { cart, addToCart, updateQuantity } = useCart();
   const { user } = useAuth();
 
+  // Initial load
   useEffect(() => {
-    loadMenuItems();
+    loadMenu();
     loadCategories();
   }, []);
+
+  // Refresh when screen comes into focus
+  useFocusEffect(
+    React.useCallback(() => {
+      // Only refresh if we have data (not initial load)
+      if (menuItems.length > 0) {
+        const filters: { search?: string; category?: string } = {};
+        if (searchQuery.trim()) filters.search = searchQuery.trim();
+        if (selectedCategory) filters.category = selectedCategory;
+        loadMenu(filters);
+      }
+    }, [searchQuery, selectedCategory])
+  );
 
   // Debounced search effect
   useEffect(() => {
@@ -43,7 +54,10 @@ const MenuScreen: React.FC = () => {
     }
 
     const timer = setTimeout(() => {
-      loadMenuItems();
+      const filters: { search?: string; category?: string } = {};
+      if (searchQuery.trim()) filters.search = searchQuery.trim();
+      if (selectedCategory) filters.category = selectedCategory;
+      loadMenu(filters);
     }, 500); // 500ms debounce
 
     setDebounceTimer(timer);
@@ -53,41 +67,16 @@ const MenuScreen: React.FC = () => {
     };
   }, [searchQuery, selectedCategory]);
 
-  const loadCategories = async () => {
-    try {
-      const products = await getProducts();
-      const uniqueCategories = [...new Set(products.map(p => p.category))].sort();
-      setCategories(uniqueCategories);
-    } catch (error) {
-      console.error('Failed to load categories:', error);
-    }
-  };
-
-  const loadMenuItems = async () => {
-    try {
-      setLoading(true);
-      const filters: { search?: string; category?: string } = {};
-      if (searchQuery.trim()) {
-        filters.search = searchQuery.trim();
-      }
-      if (selectedCategory) {
-        filters.category = selectedCategory;
-      }
-      const items = await getMenuItems(filters);
-      setMenuItems(items);
-    } catch (error: any) {
-      Alert.alert('Error', error.message || 'Failed to load menu items');
-    } finally {
-      setLoading(false);
-    }
-  };
-
   const handleRefresh = async () => {
-    setRefreshing(true);
-    await loadMenuItems();
+    const filters: { search?: string; category?: string } = {};
+    if (searchQuery.trim()) filters.search = searchQuery.trim();
+    if (selectedCategory) filters.category = selectedCategory;
+    await loadMenu(filters, true);
     await loadCategories();
-    setRefreshing(false);
   };
+
+  const loading = menuLoading;
+  const refreshing = menuRefreshing;
 
   const handleClearFilters = () => {
     setSearchQuery('');

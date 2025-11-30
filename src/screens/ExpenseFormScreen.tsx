@@ -12,6 +12,7 @@ import {
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useAuth } from '../context/AuthContext';
+import { useData } from '../context/DataContext';
 import { useExpenses } from '../hooks/useExpenses';
 import { Expense, EXPENSE_CATEGORIES } from '../types/expenses';
 import { RootStackParamList } from '../navigation/AppNavigator';
@@ -23,6 +24,7 @@ const ExpenseFormScreen: React.FC = () => {
   const navigation = useNavigation<ExpenseFormScreenNavigationProp>();
   const route = useRoute<ExpenseFormScreenRouteProp>();
   const { user } = useAuth();
+  const { onExpenseUpdated } = useData();
   const expense = route.params?.expense;
 
   const [loading, setLoading] = useState(false);
@@ -92,10 +94,14 @@ const ExpenseFormScreen: React.FC = () => {
           note: expenseData.note,
           date: expenseData.date,
         });
+        // Trigger data refresh across the app
+        onExpenseUpdated();
         Alert.alert('Success', 'Expense updated successfully');
       } else {
         // Create new expense
         await createExpense(expenseData);
+        // Trigger data refresh across the app
+        onExpenseUpdated();
         Alert.alert('Success', 'Expense created successfully');
       }
 
