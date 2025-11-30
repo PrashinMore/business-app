@@ -19,6 +19,7 @@ import UserSelectionScreen from '../screens/UserSelectionScreen';
 import CategoriesListScreen from '../screens/CategoriesListScreen';
 import CategoryFormScreen from '../screens/CategoryFormScreen';
 import CategoryDetailsScreen from '../screens/CategoryDetailsScreen';
+import InvitesScreen from '../screens/InvitesScreen';
 import MainTabNavigator from './MainTabNavigator';
 
 export type RootStackParamList = {
@@ -43,6 +44,7 @@ export type RootStackParamList = {
   CategoriesList: undefined;
   CategoryForm: { category?: any } | undefined;
   CategoryDetails: { category: any } | undefined;
+  Invites: undefined;
 };
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
@@ -171,6 +173,11 @@ const AppNavigator: React.FC = () => {
           name="CategoryDetails"
           component={CategoryDetailsScreen}
           options={{ headerShown: true, title: 'Category Details' }}
+        />
+        <Stack.Screen
+          name="Invites"
+          component={InvitesScreen}
+          options={{ headerShown: true, title: 'Invites' }}
         />
       </Stack.Navigator>
     </NavigationContainer>

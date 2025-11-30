@@ -17,7 +17,7 @@ type ProfileScreenNavigationProp = NativeStackNavigationProp<RootStackParamList>
 
 const ProfileScreen: React.FC = () => {
   const navigation = useNavigation<ProfileScreenNavigationProp>();
-  const { user, logout, refreshUser } = useAuth();
+  const { user, logout, refreshUser, pendingInvitesCount, refreshInvitesCount } = useAuth();
   const [refreshing, setRefreshing] = React.useState(false);
 
   const handleLogout = async () => {
@@ -48,6 +48,7 @@ const ProfileScreen: React.FC = () => {
     setRefreshing(true);
     try {
       await refreshUser();
+      await refreshInvitesCount();
     } catch (error: any) {
       Alert.alert('Error', error.message || 'Failed to refresh user data');
     } finally {
@@ -140,6 +141,23 @@ const ProfileScreen: React.FC = () => {
             <Text style={styles.menuItemArrow}>›</Text>
           </TouchableOpacity>
         )}
+
+        <TouchableOpacity
+          style={styles.menuItem}
+          onPress={() => {
+            navigation.getParent()?.navigate('Invites');
+          }}
+        >
+          <View style={styles.menuItemWithBadge}>
+            <Text style={styles.menuItemText}>📬 Invites</Text>
+            {pendingInvitesCount > 0 && (
+              <View style={styles.badge}>
+                <Text style={styles.badgeText}>{pendingInvitesCount}</Text>
+              </View>
+            )}
+          </View>
+          <Text style={styles.menuItemArrow}>›</Text>
+        </TouchableOpacity>
       </View>
 
       <TouchableOpacity
@@ -281,6 +299,25 @@ const styles = StyleSheet.create({
   menuItemArrow: {
     fontSize: 20,
     color: '#999',
+  },
+  menuItemWithBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  badge: {
+    backgroundColor: '#ff3b30',
+    borderRadius: 10,
+    minWidth: 20,
+    height: 20,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 6,
+  },
+  badgeText: {
+    color: '#fff',
+    fontSize: 12,
+    fontWeight: 'bold',
   },
   resetPasswordButton: {
     backgroundColor: '#fff',

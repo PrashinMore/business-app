@@ -10,15 +10,18 @@ import {
   refreshTokens,
   getRefreshToken
 } from '../services/auth';
+import { getMyInvites } from '../services/invites';
 
 interface AuthContextType {
   user: User | null;
   loading: boolean;
   isAuthenticated: boolean;
+  pendingInvitesCount: number;
   login: (email: string, password: string) => Promise<void>;
   signup: (name: string, email: string, password: string) => Promise<void>;
   logout: () => Promise<void>;
   refreshUser: () => Promise<void>;
+  refreshInvitesCount: () => Promise<void>;
 }
 
 export const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -30,6 +33,7 @@ interface AuthProviderProps {
 export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
+  const [pendingInvitesCount, setPendingInvitesCount] = useState<number>(0);
 
   // Check if user is already authenticated on mount
   useEffect(() => {
@@ -79,6 +83,9 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
               console.error('Failed to refresh user data:', error);
             }
           }
+          
+          // Check for pending invites
+          await refreshInvitesCount();
         }
       }
     } catch (error) {
@@ -90,10 +97,22 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     }
   };
 
+  const refreshInvitesCount = async () => {
+    try {
+      const invites = await getMyInvites();
+      setPendingInvitesCount(invites.length);
+    } catch (error) {
+      // Silently fail - invites are optional
+      setPendingInvitesCount(0);
+    }
+  };
+
   const login = async (email: string, password: string) => {
     try {
       const data = await authLogin(email, password);
       setUser(data.user);
+      // Check for pending invites after login
+      await refreshInvitesCount();
     } catch (error) {
       throw error;
     }
@@ -112,10 +131,12 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     try {
       await authLogout();
       setUser(null);
+      setPendingInvitesCount(0);
     } catch (error) {
       console.error('Logout error:', error);
       // Still clear user even if logout fails
       setUser(null);
+      setPendingInvitesCount(0);
     }
   };
 
@@ -133,10 +154,12 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     user,
     loading,
     isAuthenticated: !!user,
+    pendingInvitesCount,
     login,
     signup,
     logout,
     refreshUser,
+    refreshInvitesCount,
   };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
