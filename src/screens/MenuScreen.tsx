@@ -11,6 +11,9 @@ import {
   RefreshControl,
   TextInput,
   Modal,
+  Dimensions,
+  Platform,
+  ScrollView,
 } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { useCart } from '../context/CartContext';
@@ -18,6 +21,17 @@ import { useAuth } from '../context/AuthContext';
 import { useData } from '../context/DataContext';
 import { Product } from '../types/menu';
 import { API_BASE_URL } from '../config/api';
+
+// Helper function to detect tablet
+const isTablet = () => {
+  const { width } = Dimensions.get('window');
+  
+  // Consider it a tablet if width is >= 600dp or if it's an iPad
+  if (Platform.OS === 'ios') {
+    return Platform.isPad || (width >= 768);
+  }
+  return width >= 600;
+};
 
 const MenuScreen: React.FC = () => {
   const { menuItems, menuLoading, menuRefreshing, loadMenu, categories, loadCategories } = useData();
@@ -27,6 +41,12 @@ const MenuScreen: React.FC = () => {
   const [debounceTimer, setDebounceTimer] = useState<ReturnType<typeof setTimeout> | null>(null);
   const { cart, addToCart, updateQuantity } = useCart();
   const { user } = useAuth();
+  const [isTabletDevice, setIsTabletDevice] = useState(false);
+
+  // Check if device is tablet
+  useEffect(() => {
+    setIsTabletDevice(isTablet());
+  }, []);
 
   // Initial load
   useEffect(() => {
@@ -187,6 +207,113 @@ const MenuScreen: React.FC = () => {
     );
   }
 
+  if (isTabletDevice) {
+    // Tablet layout with sidebar
+    return (
+      <View style={styles.container}>
+        <View style={styles.tabletLayout}>
+          {/* Sidebar for categories */}
+          <View style={styles.sidebar}>
+            <Text style={styles.sidebarTitle}>Categories</Text>
+            <ScrollView style={styles.sidebarScroll}>
+              <TouchableOpacity
+                style={[
+                  styles.sidebarCategoryItem,
+                  !selectedCategory && styles.sidebarCategoryItemSelected,
+                ]}
+                onPress={() => setSelectedCategory(null)}
+              >
+                <Text
+                  style={[
+                    styles.sidebarCategoryText,
+                    !selectedCategory && styles.sidebarCategoryTextSelected,
+                  ]}
+                >
+                  All Categories
+                </Text>
+                {!selectedCategory && (
+                  <Text style={styles.sidebarCheckmark}>✓</Text>
+                )}
+              </TouchableOpacity>
+              {categories.map((item) => (
+                <TouchableOpacity
+                  key={item}
+                  style={[
+                    styles.sidebarCategoryItem,
+                    selectedCategory === item && styles.sidebarCategoryItemSelected,
+                  ]}
+                  onPress={() => setSelectedCategory(item === selectedCategory ? null : item)}
+                >
+                  <Text
+                    style={[
+                      styles.sidebarCategoryText,
+                      selectedCategory === item && styles.sidebarCategoryTextSelected,
+                    ]}
+                  >
+                    {item}
+                  </Text>
+                  {selectedCategory === item && (
+                    <Text style={styles.sidebarCheckmark}>✓</Text>
+                  )}
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+          </View>
+
+          {/* Main content area */}
+          <View style={styles.tabletMainContent}>
+            {/* Search Bar */}
+            <View style={styles.tabletSearchContainer}>
+              <TextInput
+                style={styles.searchInput}
+                placeholder="Search products..."
+                placeholderTextColor="#999"
+                value={searchQuery}
+                onChangeText={setSearchQuery}
+              />
+              {(searchQuery || selectedCategory) && (
+                <TouchableOpacity
+                  style={styles.clearButton}
+                  onPress={handleClearFilters}
+                >
+                  <Text style={styles.clearButtonText}>Clear</Text>
+                </TouchableOpacity>
+              )}
+            </View>
+
+            <FlatList
+              data={menuItems}
+              keyExtractor={item => item.id}
+              renderItem={renderMenuItem}
+              contentContainerStyle={styles.listContent}
+              refreshControl={
+                <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} />
+              }
+              ListEmptyComponent={
+                <View style={styles.emptyContainer}>
+                  <Text style={styles.emptyText}>
+                    {searchQuery || selectedCategory
+                      ? 'No menu items found matching your filters'
+                      : 'No menu items available'}
+                  </Text>
+                  {(searchQuery || selectedCategory) && (
+                    <TouchableOpacity
+                      style={styles.clearFiltersButton}
+                      onPress={handleClearFilters}
+                    >
+                      <Text style={styles.clearFiltersButtonText}>Clear Filters</Text>
+                    </TouchableOpacity>
+                  )}
+                </View>
+              }
+            />
+          </View>
+        </View>
+      </View>
+    );
+  }
+
+  // Phone layout with dropdown
   return (
     <View style={styles.container}>
       {/* Search and Filter Bar */}
@@ -581,6 +708,70 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 14,
     fontWeight: '600',
+  },
+  // Tablet-specific styles
+  tabletLayout: {
+    flex: 1,
+    flexDirection: 'row',
+  },
+  sidebar: {
+    width: 250,
+    backgroundColor: '#fff',
+    borderRightWidth: 1,
+    borderRightColor: '#e0e0e0',
+    paddingTop: 16,
+  },
+  sidebarTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#333',
+    paddingHorizontal: 16,
+    paddingBottom: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#e0e0e0',
+  },
+  sidebarScroll: {
+    flex: 1,
+  },
+  sidebarCategoryItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    padding: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f0f0f0',
+  },
+  sidebarCategoryItemSelected: {
+    backgroundColor: '#e3f2fd',
+    borderLeftWidth: 4,
+    borderLeftColor: '#007AFF',
+  },
+  sidebarCategoryText: {
+    fontSize: 16,
+    color: '#333',
+    flex: 1,
+  },
+  sidebarCategoryTextSelected: {
+    fontWeight: '600',
+    color: '#007AFF',
+  },
+  sidebarCheckmark: {
+    fontSize: 18,
+    color: '#007AFF',
+    fontWeight: 'bold',
+    marginLeft: 8,
+  },
+  tabletMainContent: {
+    flex: 1,
+    backgroundColor: '#f5f5f5',
+  },
+  tabletSearchContainer: {
+    backgroundColor: '#fff',
+    padding: 12,
+    flexDirection: 'row',
+    gap: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: '#e0e0e0',
   },
 });
 
