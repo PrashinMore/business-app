@@ -22,7 +22,8 @@
       },
       "edgeToEdgeEnabled": true,
       "predictiveBackGestureEnabled": false,
-      "package": "com.anonymous.businessapp"
+      "package": "com.anonymous.businessapp",
+      "jsEngine": "hermes"
     },
     "web": {
       "favicon": "./assets/yuki_logo.png"

@@ -8,7 +8,6 @@ import {
   Alert,
   ActivityIndicator,
   ScrollView,
-  FlatList,
 } from 'react-native';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -146,24 +145,23 @@ const ExpenseFormScreen: React.FC = () => {
         </Text>
 
         {/* Category Selection */}
-        <Text style={styles.label}>Category *</Text>
-        <TouchableOpacity
-          style={styles.categorySelector}
-          onPress={() => setShowCategoryPicker(!showCategoryPicker)}
-        >
-          <Text style={formData.category ? styles.categoryText : styles.placeholderText}>
-            {formData.category || 'Select a category'}
-          </Text>
-          <Text style={styles.dropdownIcon}>{showCategoryPicker ? '▲' : '▼'}</Text>
-        </TouchableOpacity>
+        <View style={styles.categorySection}>
+          <Text style={styles.label}>Category *</Text>
+          <TouchableOpacity
+            style={styles.categorySelector}
+            onPress={() => setShowCategoryPicker(!showCategoryPicker)}
+          >
+            <Text style={formData.category ? styles.categoryText : styles.placeholderText}>
+              {formData.category || 'Select a category'}
+            </Text>
+            <Text style={styles.dropdownIcon}>{showCategoryPicker ? '▲' : '▼'}</Text>
+          </TouchableOpacity>
 
-        {showCategoryPicker && (
-          <View style={styles.categoryList}>
-            <FlatList
-              data={EXPENSE_CATEGORIES}
-              keyExtractor={(item) => item}
-              renderItem={({ item: category }) => (
+          {showCategoryPicker && (
+            <View style={styles.categoryList}>
+              {EXPENSE_CATEGORIES.map((category) => (
                 <TouchableOpacity
+                  key={category}
                   style={[
                     styles.categoryItem,
                     formData.category === category && styles.categoryItemSelected,
@@ -179,12 +177,10 @@ const ExpenseFormScreen: React.FC = () => {
                     {category}
                   </Text>
                 </TouchableOpacity>
-              )}
-              nestedScrollEnabled={true}
-              style={styles.categoryFlatList}
-            />
-          </View>
-        )}
+              ))}
+            </View>
+          )}
+        </View>
 
         {/* Amount */}
         <Text style={styles.label}>Amount *</Text>
@@ -288,6 +284,10 @@ const styles = StyleSheet.create({
     marginBottom: 8,
     marginTop: 16,
   },
+  categorySection: {
+    zIndex: 1000,
+    marginBottom: 8,
+  },
   categorySelector: {
     backgroundColor: '#fff',
     borderRadius: 8,
@@ -316,11 +316,6 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#ddd',
     marginTop: 4,
-    maxHeight: 200,
-    overflow: 'hidden',
-  },
-  categoryFlatList: {
-    flex: 1,
   },
   categoryItem: {
     padding: 12,
