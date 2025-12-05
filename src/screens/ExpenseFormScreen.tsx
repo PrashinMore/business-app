@@ -8,6 +8,7 @@ import {
   Alert,
   ActivityIndicator,
   ScrollView,
+  FlatList,
 } from 'react-native';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -158,25 +159,30 @@ const ExpenseFormScreen: React.FC = () => {
 
         {showCategoryPicker && (
           <View style={styles.categoryList}>
-            {EXPENSE_CATEGORIES.map((category) => (
-              <TouchableOpacity
-                key={category}
-                style={[
-                  styles.categoryItem,
-                  formData.category === category && styles.categoryItemSelected,
-                ]}
-                onPress={() => selectCategory(category)}
-              >
-                <Text
+            <FlatList
+              data={EXPENSE_CATEGORIES}
+              keyExtractor={(item) => item}
+              renderItem={({ item: category }) => (
+                <TouchableOpacity
                   style={[
-                    styles.categoryItemText,
-                    formData.category === category && styles.categoryItemTextSelected,
+                    styles.categoryItem,
+                    formData.category === category && styles.categoryItemSelected,
                   ]}
+                  onPress={() => selectCategory(category)}
                 >
-                  {category}
-                </Text>
-              </TouchableOpacity>
-            ))}
+                  <Text
+                    style={[
+                      styles.categoryItemText,
+                      formData.category === category && styles.categoryItemTextSelected,
+                    ]}
+                  >
+                    {category}
+                  </Text>
+                </TouchableOpacity>
+              )}
+              nestedScrollEnabled={true}
+              style={styles.categoryFlatList}
+            />
           </View>
         )}
 
@@ -311,6 +317,10 @@ const styles = StyleSheet.create({
     borderColor: '#ddd',
     marginTop: 4,
     maxHeight: 200,
+    overflow: 'hidden',
+  },
+  categoryFlatList: {
+    flex: 1,
   },
   categoryItem: {
     padding: 12,

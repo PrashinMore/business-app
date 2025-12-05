@@ -487,6 +487,8 @@ const ProductFormScreen: React.FC = () => {
                       </Text>
                     </View>
                   }
+                  nestedScrollEnabled={true}
+                  style={styles.modalFlatList}
                 />
               )}
             </View>
@@ -705,6 +707,10 @@ const styles = StyleSheet.create({
     borderTopRightRadius: 20,
     maxHeight: '80%',
     paddingBottom: 20,
+    flex: 1,
+  },
+  modalFlatList: {
+    flex: 1,
   },
   modalHeader: {
     flexDirection: 'row',
