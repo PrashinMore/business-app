@@ -17,8 +17,8 @@
 const getApiUrl = () => {
   // Use production backend URL
 
-  // return 'http://localhost:4000/api';
-  return 'https://bizzness-d864.onrender.com/api';
+  return 'http://localhost:4000/api';
+  // return 'https://bizzness-d864.onrender.com/api';
   
   // Uncomment below for local development if needed
   // if (__DEV__) {

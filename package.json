@@ -8,6 +8,7 @@
     "android": "expo run:android",
     "android:release": "npm run clean:all && npx expo run:android --variant release",
     "android:release:full": "npm run clean:all && npx expo prebuild --clean && npx expo run:android --variant release",
+    "android:bundle": "cd android && gradlew bundleRelease",
     "ios": "expo run:ios",
     "web": "expo start --web",
     "clean:all": "node scripts/clean-cache.js",

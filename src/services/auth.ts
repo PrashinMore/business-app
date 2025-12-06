@@ -235,6 +235,52 @@ export async function resetPassword(
 }
 
 /**
+ * Delete user account
+ * Requires password confirmation for security
+ * @param password - User's current password
+ * @returns Promise with deletion confirmation and scheduled hard delete date
+ */
+export async function deleteAccount(password: string): Promise<{ message: string; scheduledHardDeleteOn: string }> {
+  try {
+    const token = await AsyncStorage.getItem('accessToken');
+
+    if (!token) {
+      throw new Error('No token found. Please login.');
+    }
+
+    const response = await fetch(`${API_BASE_URL}/users/me`, {
+      method: 'DELETE',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ password }),
+    });
+
+    const data = await response.json();
+
+    if (!response.ok) {
+      // Enhanced error handling
+      if (response.status === 401) {
+        if (data.message?.includes('password') || data.message?.includes('Invalid password')) {
+          throw new Error('Invalid password. Please enter your current password.');
+        }
+        throw new Error('Authentication failed. Please log in again.');
+      }
+      if (response.status === 400 && data.message?.includes('already deleted')) {
+        throw new Error('This account has already been deleted.');
+      }
+      throw new Error(data.message || 'Failed to delete account');
+    }
+
+    return data as { message: string; scheduledHardDeleteOn: string };
+  } catch (error) {
+    console.error('Delete account error:', error);
+    throw error;
+  }
+}
+
+/**
  * Logout user
  * Clears stored tokens and user data
  */

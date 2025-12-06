@@ -169,6 +169,22 @@ const ProfileScreen: React.FC = () => {
         <Text style={styles.resetPasswordButtonText}>Reset Password</Text>
       </TouchableOpacity>
 
+      {/* Danger Zone */}
+      <View style={styles.dangerZoneCard}>
+        <Text style={styles.dangerZoneTitle}>⚠️ Danger Zone</Text>
+        <Text style={styles.dangerZoneText}>
+          Once you delete your account, there is no going back. Please be certain.
+        </Text>
+        <TouchableOpacity
+          style={styles.deleteAccountButton}
+          onPress={() => {
+            navigation.getParent()?.navigate('DeleteAccount');
+          }}
+        >
+          <Text style={styles.deleteAccountButtonText}>Delete Account</Text>
+        </TouchableOpacity>
+      </View>
+
       <TouchableOpacity
         style={styles.logoutButton}
         onPress={handleLogout}
@@ -330,6 +346,45 @@ const styles = StyleSheet.create({
   },
   resetPasswordButtonText: {
     color: '#007AFF',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  dangerZoneCard: {
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    padding: 20,
+    marginBottom: 16,
+    borderLeftWidth: 4,
+    borderLeftColor: '#ff3b30',
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  dangerZoneTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#ff3b30',
+    marginBottom: 8,
+  },
+  dangerZoneText: {
+    fontSize: 14,
+    color: '#666',
+    marginBottom: 16,
+    lineHeight: 20,
+  },
+  deleteAccountButton: {
+    backgroundColor: '#ff3b30',
+    borderRadius: 8,
+    padding: 12,
+    alignItems: 'center',
+  },
+  deleteAccountButtonText: {
+    color: '#fff',
     fontSize: 16,
     fontWeight: '600',
   },
