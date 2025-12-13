@@ -138,17 +138,27 @@ export async function getPaymentTypeTotals(
 /**
  * Update sale payment status and/or payment type
  * @param saleId - Sale UUID
- * @param updates - Payment updates (paymentType and/or isPaid)
+ * @param updates - Payment updates (paymentType, isPaid, cashAmount, upiAmount)
  * @returns Promise with updated sale
  */
 export async function updateSalePayment(
   saleId: string,
-  updates: { paymentType?: 'cash' | 'UPI'; isPaid?: boolean }
+  updates: { 
+    paymentType?: 'cash' | 'UPI' | 'mixed'; 
+    isPaid?: boolean;
+    cashAmount?: number;
+    upiAmount?: number;
+  }
 ): Promise<Sale> {
   try {
     // Validate that at least one field is provided
-    if (updates.paymentType === undefined && updates.isPaid === undefined) {
-      throw new Error('At least one field (paymentType or isPaid) must be provided');
+    if (
+      updates.paymentType === undefined && 
+      updates.isPaid === undefined &&
+      updates.cashAmount === undefined &&
+      updates.upiAmount === undefined
+    ) {
+      throw new Error('At least one field must be provided');
     }
 
     const response = await apiRequest(`/sales/${saleId}`, {

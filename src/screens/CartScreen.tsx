@@ -9,6 +9,7 @@ import {
   ActivityIndicator,
   ScrollView,
   Image,
+  TextInput,
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -31,8 +32,11 @@ const CartScreen: React.FC = () => {
   const { isOnline, queuedSalesCount, manualSync } = useSync();
   const { onSaleCreated } = useData();
   const [checkingOut, setCheckingOut] = useState(false);
-  const [paymentType, setPaymentType] = useState<'cash' | 'UPI'>('cash');
+  const [paymentType, setPaymentType] = useState<'cash' | 'UPI' | 'mixed'>('cash');
   const [isPaid, setIsPaid] = useState(false);
+  const [cashAmount, setCashAmount] = useState<string>('');
+  const [upiAmount, setUpiAmount] = useState<string>('');
+  const [useSplitPayment, setUseSplitPayment] = useState(false);
   
   // Ref to track if we should print after checkout
   const printAfterCheckoutRef = useRef(false);
@@ -85,6 +89,22 @@ const CartScreen: React.FC = () => {
       setCheckingOut(true);
 
       const totalAmount = getTotalAmount();
+      const cash = useSplitPayment ? parseFloat(cashAmount) || 0 : 0;
+      const upi = useSplitPayment ? parseFloat(upiAmount) || 0 : 0;
+
+      // Validation for split payment
+      if (useSplitPayment) {
+        if (cash < 0 || upi < 0) {
+          Alert.alert('Invalid Amount', 'Cash and UPI amounts must be greater than or equal to 0');
+          setCheckingOut(false);
+          return;
+        }
+        if (cash + upi > totalAmount) {
+          Alert.alert('Invalid Amount', `Total payment (₹${(cash + upi).toFixed(2)}) cannot exceed total amount (₹${totalAmount.toFixed(2)})`);
+          setCheckingOut(false);
+          return;
+        }
+      }
 
       const items = cart.map(item => ({
         productId: item.productId,
@@ -92,13 +112,50 @@ const CartScreen: React.FC = () => {
         sellingPrice: item.sellingPrice,
       }));
 
+      // Determine payment type and amounts
+      let finalPaymentType: 'cash' | 'UPI' | 'mixed' = paymentType;
+      let finalCashAmount: number | undefined;
+      let finalUpiAmount: number | undefined;
+      let finalIsPaid = isPaid;
+
+      if (useSplitPayment) {
+        finalCashAmount = cash;
+        finalUpiAmount = upi;
+        if (cash > 0 && upi > 0) {
+          finalPaymentType = 'mixed';
+        } else if (cash > 0) {
+          finalPaymentType = 'cash';
+        } else if (upi > 0) {
+          finalPaymentType = 'UPI';
+        }
+        // Auto-calculate isPaid if amounts provided
+        if (cash + upi === totalAmount) {
+          finalIsPaid = true;
+        }
+      } else {
+        // Legacy mode: use paymentType to determine amounts
+        // Only set amounts if payment is marked as paid
+        if (isPaid) {
+          if (paymentType === 'cash') {
+            finalCashAmount = totalAmount;
+            finalUpiAmount = 0;
+          } else if (paymentType === 'UPI') {
+            finalCashAmount = 0;
+            finalUpiAmount = totalAmount;
+          }
+        }
+        // If not paid, don't send amounts (let API handle it)
+      }
+
       const saleData = {
         date: new Date().toISOString(),
         items,
         totalAmount: Number(totalAmount.toFixed(2)),
         soldBy: user.id,
-        paymentType,
-        isPaid,
+        paymentType: finalPaymentType,
+        ...(finalCashAmount !== undefined && { cashAmount: Number(finalCashAmount.toFixed(2)) }),
+        ...(finalUpiAmount !== undefined && { upiAmount: Number(finalUpiAmount.toFixed(2)) }),
+        isPaid: finalIsPaid,
       };
 
       const sale = await checkout(saleData);
@@ -149,8 +206,10 @@ const CartScreen: React.FC = () => {
           items: printBillItems,
           subtotal: totalAmount,
           totalAmount,
-          paymentType,
-          isPaid,
+          paymentType: finalPaymentType,
+          isPaid: finalIsPaid,
+          ...(finalCashAmount !== undefined && { cashAmount: finalCashAmount }),
+          ...(finalUpiAmount !== undefined && { upiAmount: finalUpiAmount }),
           cashierName: user?.name,
         };
 
@@ -273,14 +332,19 @@ const CartScreen: React.FC = () => {
                 <TouchableOpacity
                   style={[
                     styles.paymentTypeButton,
-                    paymentType === 'cash' && styles.paymentTypeButtonActive,
+                    !useSplitPayment && paymentType === 'cash' && styles.paymentTypeButtonActive,
                   ]}
-                  onPress={() => setPaymentType('cash')}
+                  onPress={() => {
+                    setUseSplitPayment(false);
+                    setPaymentType('cash');
+                    setCashAmount('');
+                    setUpiAmount('');
+                  }}
                 >
                   <Text
                     style={[
                       styles.paymentTypeButtonText,
-                      paymentType === 'cash' && styles.paymentTypeButtonTextActive,
+                      !useSplitPayment && paymentType === 'cash' && styles.paymentTypeButtonTextActive,
                     ]}
                   >
                     Cash
@@ -289,59 +353,147 @@ const CartScreen: React.FC = () => {
                 <TouchableOpacity
                   style={[
                     styles.paymentTypeButton,
-                    paymentType === 'UPI' && styles.paymentTypeButtonActive,
+                    !useSplitPayment && paymentType === 'UPI' && styles.paymentTypeButtonActive,
                   ]}
-                  onPress={() => setPaymentType('UPI')}
+                  onPress={() => {
+                    setUseSplitPayment(false);
+                    setPaymentType('UPI');
+                    setCashAmount('');
+                    setUpiAmount('');
+                  }}
                 >
                   <Text
                     style={[
                       styles.paymentTypeButtonText,
-                      paymentType === 'UPI' && styles.paymentTypeButtonTextActive,
+                      !useSplitPayment && paymentType === 'UPI' && styles.paymentTypeButtonTextActive,
                     ]}
                   >
                     UPI
                   </Text>
                 </TouchableOpacity>
+                <TouchableOpacity
+                  style={[
+                    styles.paymentTypeButton,
+                    useSplitPayment && styles.paymentTypeButtonActive,
+                  ]}
+                  onPress={() => {
+                    setUseSplitPayment(true);
+                    setPaymentType('mixed');
+                  }}
+                >
+                  <Text
+                    style={[
+                      styles.paymentTypeButtonText,
+                      useSplitPayment && styles.paymentTypeButtonTextActive,
+                    ]}
+                  >
+                    Split
+                  </Text>
+                </TouchableOpacity>
               </View>
             </View>
 
-            <View style={styles.paymentStatusSection}>
-              <Text style={styles.paymentTypeLabel}>Payment Status:</Text>
-              <View style={styles.paymentTypeButtons}>
-                <TouchableOpacity
-                  style={[
-                    styles.paymentTypeButton,
-                    !isPaid && styles.paymentTypeButtonActive,
-                  ]}
-                  onPress={() => setIsPaid(false)}
-                >
-                  <Text
-                    style={[
-                      styles.paymentTypeButtonText,
-                      !isPaid && styles.paymentTypeButtonTextActive,
-                    ]}
-                  >
-                    Pending
-                  </Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={[
-                    styles.paymentTypeButton,
-                    isPaid && styles.paymentTypeButtonActive,
-                  ]}
-                  onPress={() => setIsPaid(true)}
-                >
-                  <Text
-                    style={[
-                      styles.paymentTypeButtonText,
-                      isPaid && styles.paymentTypeButtonTextActive,
-                    ]}
-                  >
-                    Paid
-                  </Text>
-                </TouchableOpacity>
+            {useSplitPayment && (
+              <View style={styles.splitPaymentSection}>
+                <Text style={styles.paymentTypeLabel}>Split Payment Amounts:</Text>
+                <View style={styles.splitPaymentInputs}>
+                  <View style={styles.splitPaymentInputContainer}>
+                    <Text style={styles.splitPaymentLabel}>Cash (₹):</Text>
+                    <TextInput
+                      style={styles.splitPaymentInput}
+                      value={cashAmount}
+                      onChangeText={(text) => {
+                        // Allow only numbers and decimal point
+                        const numericValue = text.replace(/[^0-9.]/g, '');
+                        setCashAmount(numericValue);
+                      }}
+                      placeholder="0.00"
+                      keyboardType="decimal-pad"
+                    />
+                  </View>
+                  <View style={styles.splitPaymentInputContainer}>
+                    <Text style={styles.splitPaymentLabel}>UPI (₹):</Text>
+                    <TextInput
+                      style={styles.splitPaymentInput}
+                      value={upiAmount}
+                      onChangeText={(text) => {
+                        // Allow only numbers and decimal point
+                        const numericValue = text.replace(/[^0-9.]/g, '');
+                        setUpiAmount(numericValue);
+                      }}
+                      placeholder="0.00"
+                      keyboardType="decimal-pad"
+                    />
+                  </View>
+                </View>
+                {(() => {
+                  const cash = parseFloat(cashAmount) || 0;
+                  const upi = parseFloat(upiAmount) || 0;
+                  const paid = cash + upi;
+                  const remaining = totalAmount - paid;
+                  return (
+                    <View style={styles.splitPaymentSummary}>
+                      <Text style={styles.splitPaymentSummaryText}>
+                        Paid: ₹{paid.toFixed(2)} / Total: ₹{totalAmount.toFixed(2)}
+                      </Text>
+                      {remaining > 0 && (
+                        <Text style={styles.splitPaymentRemaining}>
+                          Remaining: ₹{remaining.toFixed(2)}
+                        </Text>
+                      )}
+                      {remaining < 0 && (
+                        <Text style={styles.splitPaymentError}>
+                          Exceeds total by ₹{Math.abs(remaining).toFixed(2)}
+                        </Text>
+                      )}
+                      {remaining === 0 && paid > 0 && (
+                        <Text style={styles.splitPaymentComplete}>✓ Full payment</Text>
+                      )}
+                    </View>
+                  );
+                })()}
               </View>
-            </View>
+            )}
+
+            {!useSplitPayment && (
+              <View style={styles.paymentStatusSection}>
+                <Text style={styles.paymentTypeLabel}>Payment Status:</Text>
+                <View style={styles.paymentTypeButtons}>
+                  <TouchableOpacity
+                    style={[
+                      styles.paymentTypeButton,
+                      !isPaid && styles.paymentTypeButtonActive,
+                    ]}
+                    onPress={() => setIsPaid(false)}
+                  >
+                    <Text
+                      style={[
+                        styles.paymentTypeButtonText,
+                        !isPaid && styles.paymentTypeButtonTextActive,
+                      ]}
+                    >
+                      Pending
+                    </Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[
+                      styles.paymentTypeButton,
+                      isPaid && styles.paymentTypeButtonActive,
+                    ]}
+                    onPress={() => setIsPaid(true)}
+                  >
+                    <Text
+                      style={[
+                        styles.paymentTypeButtonText,
+                        isPaid && styles.paymentTypeButtonTextActive,
+                      ]}
+                    >
+                      Paid
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            )}
 
             <View style={styles.totalSection}>
               <Text style={styles.totalLabel}>Total Amount:</Text>
@@ -695,6 +847,61 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 12,
     fontWeight: '600',
+  },
+  splitPaymentSection: {
+    marginBottom: 16,
+    marginTop: 8,
+  },
+  splitPaymentInputs: {
+    gap: 12,
+    marginTop: 8,
+  },
+  splitPaymentInputContainer: {
+    marginBottom: 8,
+  },
+  splitPaymentLabel: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#333',
+    marginBottom: 6,
+  },
+  splitPaymentInput: {
+    borderWidth: 1,
+    borderColor: '#ddd',
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    fontSize: 16,
+    backgroundColor: '#fff',
+  },
+  splitPaymentSummary: {
+    marginTop: 12,
+    padding: 12,
+    backgroundColor: '#f9f9f9',
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#e0e0e0',
+  },
+  splitPaymentSummaryText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#333',
+    marginBottom: 4,
+  },
+  splitPaymentRemaining: {
+    fontSize: 13,
+    color: '#ff9800',
+    fontWeight: '500',
+  },
+  splitPaymentError: {
+    fontSize: 13,
+    color: '#ff3b30',
+    fontWeight: '500',
+  },
+  splitPaymentComplete: {
+    fontSize: 13,
+    color: '#28a745',
+    fontWeight: '500',
   },
 });
 

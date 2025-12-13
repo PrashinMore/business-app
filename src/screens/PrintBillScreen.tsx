@@ -33,8 +33,10 @@ export interface BillData {
   subtotal: number;
   discount?: number;
   totalAmount: number;
-  paymentType: 'cash' | 'UPI';
+  paymentType: 'cash' | 'UPI' | 'mixed';
   isPaid: boolean;
+  cashAmount?: number;
+  upiAmount?: number;
   cashierName?: string;
 }
 
@@ -271,6 +273,12 @@ const PrintBillScreen: React.FC = () => {
           <!-- Payment Info -->
           <div class="payment-info">
             <div style="margin-bottom: 4px; font-size: 10px;">Payment: <strong>${billData.paymentType.toUpperCase()}</strong></div>
+            ${(billData.paymentType === 'mixed' || (billData.cashAmount !== undefined && billData.upiAmount !== undefined)) ? `
+            <div style="font-size: 9px; margin: 4px 0;">
+              <div>Cash: ${formatCurrency(billData.cashAmount || 0)}</div>
+              <div>UPI: ${formatCurrency(billData.upiAmount || 0)}</div>
+            </div>
+            ` : ''}
             <span class="payment-badge ${billData.isPaid ? 'paid' : 'pending'}">
               ${billData.isPaid ? '✓ PAID' : '⏳ PENDING'}
             </span>
@@ -402,6 +410,12 @@ const PrintBillScreen: React.FC = () => {
           {/* Payment Info */}
           <View style={styles.paymentSection}>
             <Text style={styles.paymentMethod}>Payment: {billData.paymentType.toUpperCase()}</Text>
+            {(billData.paymentType === 'mixed' || (billData.cashAmount !== undefined && billData.upiAmount !== undefined)) && (
+              <View style={styles.splitPaymentBreakdown}>
+                <Text style={styles.splitPaymentText}>Cash: {formatCurrency(billData.cashAmount || 0)}</Text>
+                <Text style={styles.splitPaymentText}>UPI: {formatCurrency(billData.upiAmount || 0)}</Text>
+              </View>
+            )}
             <View style={[styles.paymentBadge, billData.isPaid ? styles.paidBadge : styles.pendingBadge]}>
               <Text style={[styles.paymentBadgeText, billData.isPaid ? styles.paidText : styles.pendingText]}>
                 {billData.isPaid ? '✓ PAID' : '⏳ PENDING'}
@@ -642,6 +656,16 @@ const styles = StyleSheet.create({
     fontSize: 11,
     color: '#666',
     marginTop: 4,
+    fontFamily: Platform.OS === 'ios' ? 'Courier New' : 'monospace',
+  },
+  splitPaymentBreakdown: {
+    marginTop: 6,
+    marginBottom: 6,
+    gap: 2,
+  },
+  splitPaymentText: {
+    fontSize: 10,
+    color: '#666',
     fontFamily: Platform.OS === 'ios' ? 'Courier New' : 'monospace',
   },
   actionButtons: {

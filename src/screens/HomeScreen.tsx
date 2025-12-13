@@ -18,6 +18,8 @@ import { useData } from '../context/DataContext';
 import { RootStackParamList } from '../navigation/AppNavigator';
 import { SalesTrendRange } from '../types/dashboard';
 import { API_BASE_URL } from '../config/api';
+import { getUserOrganizations } from '../services/organizations';
+import { getDashboardSummary } from '../services/dashboard';
 
 type HomeScreenNavigationProp = NativeStackNavigationProp<RootStackParamList>;
 
@@ -28,23 +30,111 @@ const HomeScreen: React.FC = () => {
   const { dashboard, dashboardLoading, dashboardRefreshing, loadDashboard } = useData();
   
   const [trendRange, setTrendRange] = useState<SalesTrendRange>('7days');
+  const [hasOrganization, setHasOrganization] = useState<boolean | null>(null);
+  const [checkingOrganization, setCheckingOrganization] = useState(true);
 
   const cartItemCount = getCartItemCount();
   const cartTotal = getTotalAmount();
 
+  // Check if user belongs to any organization
+  useEffect(() => {
+    const checkUserOrganization = async () => {
+      if (!user) {
+        setCheckingOrganization(false);
+        return;
+      }
+
+      try {
+        // For admin users, check their organizations
+        if (user.role === 'admin') {
+          const organizations = await getUserOrganizations(user.id);
+          setHasOrganization(organizations.length > 0);
+        } else {
+          // For non-admin users, try to access dashboard API directly
+          // to check if they have an organization
+          try {
+            await getDashboardSummary();
+            // If dashboard API succeeds, user has an organization
+            setHasOrganization(true);
+          } catch (dashboardError: any) {
+            const errorMessage = dashboardError?.message || '';
+            // Check if error is related to missing organization
+            if (errorMessage.toLowerCase().includes('organization') || 
+                errorMessage.toLowerCase().includes('not assigned') ||
+                errorMessage.toLowerCase().includes('no organization')) {
+              setHasOrganization(false);
+            } else {
+              // Other errors - assume they have organization for now
+              setHasOrganization(true);
+            }
+          }
+        }
+      } catch (error: any) {
+        // If getting organizations fails, check error message
+        const errorMessage = error?.message || '';
+        if (errorMessage.toLowerCase().includes('organization') || 
+            errorMessage.toLowerCase().includes('not assigned')) {
+          setHasOrganization(false);
+        } else {
+          // For admin, if we can't fetch organizations, assume they have none
+          if (user.role === 'admin') {
+            setHasOrganization(false);
+          } else {
+            // For non-admin, assume they have organization for now
+            setHasOrganization(true);
+          }
+        }
+      } finally {
+        setCheckingOrganization(false);
+      }
+    };
+
+    checkUserOrganization();
+  }, [user]);
+
   // Load dashboard on mount and when trend range changes
   useEffect(() => {
-    loadDashboard(trendRange);
-  }, [trendRange]);
+    if (!checkingOrganization && hasOrganization !== false) {
+      loadDashboard(trendRange);
+    }
+  }, [trendRange, checkingOrganization, hasOrganization]);
 
   // Refresh when screen comes into focus
   useFocusEffect(
     React.useCallback(() => {
-      // Only refresh if we have data (not initial load)
-      if (dashboard.summary) {
+      // Re-check organization status when screen comes into focus
+      // in case user created/joined an organization
+      if (user) {
+        const recheckOrganization = async () => {
+          try {
+            if (user.role === 'admin') {
+              const organizations = await getUserOrganizations(user.id);
+              setHasOrganization(organizations.length > 0);
+            } else {
+              try {
+                await getDashboardSummary();
+                setHasOrganization(true);
+              } catch (dashboardError: any) {
+                const errorMessage = dashboardError?.message || '';
+                if (errorMessage.toLowerCase().includes('organization') || 
+                    errorMessage.toLowerCase().includes('not assigned') ||
+                    errorMessage.toLowerCase().includes('no organization')) {
+                  setHasOrganization(false);
+                }
+              }
+            }
+          } catch (error) {
+            // Silently fail - keep current state
+          }
+        };
+        recheckOrganization();
+      }
+
+      // Only refresh dashboard if we have data (not initial load)
+      if (dashboard.summary && hasOrganization !== false) {
         loadDashboard(trendRange);
       }
-    }, [trendRange])
+    }, [trendRange, user, hasOrganization])
   );
 
   const handleRefresh = async () => {
@@ -70,7 +160,7 @@ const HomeScreen: React.FC = () => {
     return `₹${Number(amount).toFixed(2)}`;
   };
 
-  if (loading) {
+  if (loading || checkingOrganization) {
     return (
       <View style={styles.loadingContainer}>
         <ActivityIndicator size="large" color="#007AFF" />
@@ -84,6 +174,32 @@ const HomeScreen: React.FC = () => {
       <View style={styles.container}>
         <Text>Loading...</Text>
       </View>
+    );
+  }
+
+  // Show message if user has no organization
+  if (hasOrganization === false) {
+    return (
+      <ScrollView
+        style={styles.container}
+        contentContainerStyle={styles.emptyContent}
+      >
+        <View style={styles.noOrganizationContainer}>
+          <Text style={styles.noOrganizationIcon}>🏢</Text>
+          <Text style={styles.noOrganizationTitle}>No Organization Found</Text>
+          <Text style={styles.noOrganizationMessage}>
+            You are not currently assigned to any organization. Please create an organization to start using the dashboard.
+          </Text>
+          <TouchableOpacity
+            style={styles.createOrganizationButton}
+            onPress={() => navigation.navigate('OrganizationsList')}
+          >
+            <Text style={styles.createOrganizationButtonText}>
+              Go to Organizations
+            </Text>
+          </TouchableOpacity>
+        </View>
+      </ScrollView>
     );
   }
 
@@ -721,6 +837,59 @@ const styles = StyleSheet.create({
     color: '#666',
     textAlign: 'center',
     padding: 20,
+  },
+  emptyContent: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 32,
+  },
+  noOrganizationContainer: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 32,
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+    maxWidth: 400,
+  },
+  noOrganizationIcon: {
+    fontSize: 64,
+    marginBottom: 16,
+  },
+  noOrganizationTitle: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: '#333',
+    marginBottom: 12,
+    textAlign: 'center',
+  },
+  noOrganizationMessage: {
+    fontSize: 16,
+    color: '#666',
+    textAlign: 'center',
+    marginBottom: 24,
+    lineHeight: 24,
+  },
+  createOrganizationButton: {
+    backgroundColor: '#007AFF',
+    paddingHorizontal: 24,
+    paddingVertical: 12,
+    borderRadius: 8,
+    minWidth: 200,
+  },
+  createOrganizationButtonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '600',
+    textAlign: 'center',
   },
 });
 

@@ -36,6 +36,8 @@ export interface Sale {
   soldBy: string;
   paymentType: string;
   isPaid: boolean;
+  cashAmount?: number | null;
+  upiAmount?: number | null;
   organizationId: string;
   createdAt: string;
 }
@@ -49,7 +51,9 @@ export interface CreateSaleRequest {
   }[];
   totalAmount: number;
   soldBy: string;
-  paymentType?: 'cash' | 'UPI';
+  paymentType?: 'cash' | 'UPI' | 'mixed';
+  cashAmount?: number;
+  upiAmount?: number;
   isPaid?: boolean;
 }
 

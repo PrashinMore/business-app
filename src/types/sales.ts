@@ -6,7 +6,7 @@ export interface SalesFilters {
   to?: string; // ISO 8601 date
   productId?: string; // Product UUID
   staff?: string; // Staff name or ID (partial match)
-  paymentType?: 'cash' | 'UPI';
+  paymentType?: 'cash' | 'UPI' | 'mixed';
 }
 
 export interface DailyTotal {

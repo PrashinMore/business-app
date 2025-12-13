@@ -7,6 +7,7 @@ import {
   ActivityIndicator,
   Alert,
   RefreshControl,
+  TextInput,
 } from 'react-native';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -31,6 +32,9 @@ const SaleDetailsScreen: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [updatingPayment, setUpdatingPayment] = useState(false);
+  const [editingSplitPayment, setEditingSplitPayment] = useState(false);
+  const [cashAmount, setCashAmount] = useState<string>('');
+  const [upiAmount, setUpiAmount] = useState<string>('');
 
   // Extract product IDs from sale items for fetching names
   const productIds = sale?.items.map(item => item.productId) || [];
@@ -58,8 +62,10 @@ const SaleDetailsScreen: React.FC = () => {
       items: billItems,
       subtotal: Number(sale.totalAmount),
       totalAmount: Number(sale.totalAmount),
-      paymentType: (sale.paymentType as 'cash' | 'UPI') || 'cash',
+      paymentType: (sale.paymentType as 'cash' | 'UPI' | 'mixed') || 'cash',
       isPaid: sale.isPaid,
+      ...(sale.cashAmount !== undefined && sale.cashAmount !== null && { cashAmount: Number(sale.cashAmount) }),
+      ...(sale.upiAmount !== undefined && sale.upiAmount !== null && { upiAmount: Number(sale.upiAmount) }),
       cashierName: user?.name,
     };
 
@@ -69,6 +75,13 @@ const SaleDetailsScreen: React.FC = () => {
   useEffect(() => {
     loadSaleDetails();
   }, [saleId]);
+
+  useEffect(() => {
+    if (sale) {
+      setCashAmount(sale.cashAmount?.toString() || '0');
+      setUpiAmount(sale.upiAmount?.toString() || '0');
+    }
+  }, [sale]);
 
   const loadSaleDetails = async () => {
     try {
@@ -104,7 +117,7 @@ const SaleDetailsScreen: React.FC = () => {
     }
   };
 
-  const handleUpdatePaymentType = async (paymentType: 'cash' | 'UPI') => {
+  const handleUpdatePaymentType = async (paymentType: 'cash' | 'UPI' | 'mixed') => {
     if (!sale) return;
 
     try {
@@ -114,6 +127,55 @@ const SaleDetailsScreen: React.FC = () => {
       Alert.alert('Success', `Payment type updated to ${paymentType.toUpperCase()}`);
     } catch (error: any) {
       Alert.alert('Error', error.message || 'Failed to update payment type');
+    } finally {
+      setUpdatingPayment(false);
+    }
+  };
+
+  const handleUpdateSplitPayment = async () => {
+    if (!sale) return;
+
+    const cash = parseFloat(cashAmount) || 0;
+    const upi = parseFloat(upiAmount) || 0;
+    const total = Number(sale.totalAmount);
+
+    if (cash < 0 || upi < 0) {
+      Alert.alert('Invalid Amount', 'Cash and UPI amounts must be greater than or equal to 0');
+      return;
+    }
+
+    if (cash + upi > total) {
+      Alert.alert('Invalid Amount', `Total payment (₹${(cash + upi).toFixed(2)}) cannot exceed total amount (₹${total.toFixed(2)})`);
+      return;
+    }
+
+    try {
+      setUpdatingPayment(true);
+      const updates: { cashAmount?: number; upiAmount?: number; paymentType?: 'cash' | 'UPI' | 'mixed'; isPaid?: boolean } = {
+        cashAmount: Number(cash.toFixed(2)),
+        upiAmount: Number(upi.toFixed(2)),
+      };
+
+      // Determine payment type
+      if (cash > 0 && upi > 0) {
+        updates.paymentType = 'mixed';
+      } else if (cash > 0) {
+        updates.paymentType = 'cash';
+      } else if (upi > 0) {
+        updates.paymentType = 'UPI';
+      }
+
+      // Auto-calculate isPaid
+      if (cash + upi === total) {
+        updates.isPaid = true;
+      }
+
+      const updatedSale = await updateSalePayment(sale.id, updates);
+      setSale(updatedSale);
+      setEditingSplitPayment(false);
+      Alert.alert('Success', 'Payment amounts updated successfully');
+    } catch (error: any) {
+      Alert.alert('Error', error.message || 'Failed to update payment amounts');
     } finally {
       setUpdatingPayment(false);
     }
@@ -191,19 +253,15 @@ const SaleDetailsScreen: React.FC = () => {
               style={[
                 styles.paymentTypeBadge,
                 sale.paymentType === 'UPI' && styles.paymentTypeBadgeUPI,
+                sale.paymentType === 'mixed' && styles.paymentTypeBadgeMixed,
               ]}
-              onPress={() => {
-                if (sale.paymentType !== 'cash') {
-                  handleUpdatePaymentType('cash');
-                }
-              }}
               disabled={updatingPayment}
             >
               <Text style={styles.paymentTypeText}>
                 {(sale.paymentType || 'cash').toUpperCase()}
               </Text>
             </TouchableOpacity>
-            {sale.paymentType === 'cash' && (
+            {sale.paymentType !== 'mixed' && sale.paymentType === 'cash' && (
               <TouchableOpacity
                 style={[styles.paymentTypeButton, styles.paymentTypeButtonUPI]}
                 onPress={() => handleUpdatePaymentType('UPI')}
@@ -212,7 +270,7 @@ const SaleDetailsScreen: React.FC = () => {
                 <Text style={styles.paymentTypeButtonText}>Switch to UPI</Text>
               </TouchableOpacity>
             )}
-            {sale.paymentType === 'UPI' && (
+            {sale.paymentType !== 'mixed' && sale.paymentType === 'UPI' && (
               <TouchableOpacity
                 style={[styles.paymentTypeButton, styles.paymentTypeButtonCash]}
                 onPress={() => handleUpdatePaymentType('cash')}
@@ -223,6 +281,89 @@ const SaleDetailsScreen: React.FC = () => {
             )}
           </View>
         </View>
+
+        {/* Split Payment Details */}
+        {(sale.paymentType === 'mixed' || sale.cashAmount !== undefined || sale.upiAmount !== undefined) && (
+          <View style={styles.infoRow}>
+            <Text style={styles.infoLabel}>Payment Breakdown:</Text>
+            <View style={styles.splitPaymentContainer}>
+              {!editingSplitPayment ? (
+                <>
+                  <View style={styles.splitPaymentDisplay}>
+                    <Text style={styles.splitPaymentLabel}>Cash:</Text>
+                    <Text style={styles.splitPaymentValue}>
+                      ₹{(sale.cashAmount || 0).toFixed(2)}
+                    </Text>
+                  </View>
+                  <View style={styles.splitPaymentDisplay}>
+                    <Text style={styles.splitPaymentLabel}>UPI:</Text>
+                    <Text style={styles.splitPaymentValue}>
+                      ₹{(sale.upiAmount || 0).toFixed(2)}
+                    </Text>
+                  </View>
+                  <TouchableOpacity
+                    style={styles.editSplitButton}
+                    onPress={() => setEditingSplitPayment(true)}
+                    disabled={updatingPayment}
+                  >
+                    <Text style={styles.editSplitButtonText}>Edit</Text>
+                  </TouchableOpacity>
+                </>
+              ) : (
+                <>
+                  <View style={styles.splitPaymentInputRow}>
+                    <Text style={styles.splitPaymentInputLabel}>Cash (₹):</Text>
+                    <TextInput
+                      style={styles.splitPaymentInput}
+                      value={cashAmount}
+                      onChangeText={(text) => {
+                        const numericValue = text.replace(/[^0-9.]/g, '');
+                        setCashAmount(numericValue);
+                      }}
+                      keyboardType="decimal-pad"
+                      placeholder="0.00"
+                    />
+                  </View>
+                  <View style={styles.splitPaymentInputRow}>
+                    <Text style={styles.splitPaymentInputLabel}>UPI (₹):</Text>
+                    <TextInput
+                      style={styles.splitPaymentInput}
+                      value={upiAmount}
+                      onChangeText={(text) => {
+                        const numericValue = text.replace(/[^0-9.]/g, '');
+                        setUpiAmount(numericValue);
+                      }}
+                      keyboardType="decimal-pad"
+                      placeholder="0.00"
+                    />
+                  </View>
+                  <View style={styles.splitPaymentActions}>
+                    <TouchableOpacity
+                      style={styles.splitPaymentCancelButton}
+                      onPress={() => {
+                        setEditingSplitPayment(false);
+                        setCashAmount(sale.cashAmount?.toString() || '0');
+                        setUpiAmount(sale.upiAmount?.toString() || '0');
+                      }}
+                      disabled={updatingPayment}
+                    >
+                      <Text style={styles.splitPaymentCancelText}>Cancel</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={styles.splitPaymentSaveButton}
+                      onPress={handleUpdateSplitPayment}
+                      disabled={updatingPayment}
+                    >
+                      <Text style={styles.splitPaymentSaveText}>
+                        {updatingPayment ? 'Saving...' : 'Save'}
+                      </Text>
+                    </TouchableOpacity>
+                  </View>
+                </>
+              )}
+            </View>
+          </View>
+        )}
 
         <View style={styles.infoRow}>
           <Text style={styles.infoLabel}>Payment Status:</Text>
@@ -559,6 +700,91 @@ const styles = StyleSheet.create({
   },
   printButtonText: {
     fontSize: 16,
+    fontWeight: '600',
+    color: '#fff',
+  },
+  paymentTypeBadgeMixed: {
+    backgroundColor: '#fff3e0',
+  },
+  splitPaymentContainer: {
+    flex: 1,
+    alignItems: 'flex-end',
+  },
+  splitPaymentDisplay: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 6,
+    gap: 8,
+  },
+  splitPaymentLabel: {
+    fontSize: 14,
+    color: '#666',
+    fontWeight: '500',
+    minWidth: 50,
+  },
+  splitPaymentValue: {
+    fontSize: 14,
+    color: '#333',
+    fontWeight: '600',
+  },
+  editSplitButton: {
+    marginTop: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    backgroundColor: '#007AFF',
+    borderRadius: 6,
+  },
+  editSplitButtonText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#fff',
+  },
+  splitPaymentInputRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 12,
+    gap: 8,
+  },
+  splitPaymentInputLabel: {
+    fontSize: 14,
+    color: '#666',
+    fontWeight: '500',
+    minWidth: 70,
+  },
+  splitPaymentInput: {
+    flex: 1,
+    borderWidth: 1,
+    borderColor: '#ddd',
+    borderRadius: 6,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    fontSize: 14,
+    backgroundColor: '#fff',
+  },
+  splitPaymentActions: {
+    flexDirection: 'row',
+    gap: 8,
+    marginTop: 8,
+  },
+  splitPaymentCancelButton: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    backgroundColor: '#f0f0f0',
+    borderRadius: 6,
+  },
+  splitPaymentCancelText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#666',
+  },
+  splitPaymentSaveButton: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    backgroundColor: '#28a745',
+    borderRadius: 6,
+  },
+  splitPaymentSaveText: {
+    fontSize: 12,
     fontWeight: '600',
     color: '#fff',
   },
