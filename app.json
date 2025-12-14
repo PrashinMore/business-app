@@ -2,7 +2,7 @@
   "expo": {
     "name": "biznes",
     "slug": "biznes",
-    "version": "1.0.0",
+    "version": "1.0.2",
     "orientation": "portrait",
     "icon": "./assets/yuki_logo.png",
     "userInterfaceStyle": "light",

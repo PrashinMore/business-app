@@ -92,12 +92,15 @@ const CartScreen: React.FC = () => {
         sellingPrice: item.sellingPrice,
       }));
 
+      // Ensure paymentType is valid (handle 'mixed' if it exists)
+      const validPaymentType: 'cash' | 'UPI' = paymentType === 'mixed' ? 'cash' : paymentType;
+
       const saleData = {
         date: new Date().toISOString(),
         items,
         totalAmount: Number(totalAmount.toFixed(2)),
         soldBy: user.id,
-        paymentType,
+        paymentType: validPaymentType,
         isPaid,
       };
 
@@ -117,7 +120,7 @@ const CartScreen: React.FC = () => {
 
         Alert.alert(
           'Order Queued Offline',
-          `Your order has been queued for processing when connection is restored.\n\nLocal ID: ${sale.id}\nTotal: ₹${totalAmount.toFixed(2)}\nPayment: ${paymentType.toUpperCase()}\nStatus: ${isPaid ? 'Paid' : 'Pending'}\n\n${queuedSalesCount + 1} order(s) pending sync.`,
+          `Your order has been queued for processing when connection is restored.\n\nLocal ID: ${sale.id}\nTotal: ₹${totalAmount.toFixed(2)}\nPayment: ${validPaymentType.toUpperCase()}\nStatus: ${isPaid ? 'Paid' : 'Pending'}\n\n${queuedSalesCount + 1} order(s) pending sync.`,
           [
             { text: 'OK' },
             ...(isOnline ? [] : [
@@ -149,7 +152,7 @@ const CartScreen: React.FC = () => {
           items: printBillItems,
           subtotal: totalAmount,
           totalAmount,
-          paymentType,
+          paymentType: validPaymentType,
           isPaid,
           cashierName: user?.name,
         };
@@ -169,7 +172,7 @@ const CartScreen: React.FC = () => {
           // Show alert with print option
           Alert.alert(
             'Order Placed! 🎉',
-            `Your order has been placed successfully.\n\nSale ID: ${sale.id.substring(0, 8).toUpperCase()}\nTotal: ₹${totalAmount.toFixed(2)}\nPayment: ${paymentType.toUpperCase()}\nStatus: ${isPaid ? 'Paid' : 'Pending'}`,
+            `Your order has been placed successfully.\n\nSale ID: ${sale.id.substring(0, 8).toUpperCase()}\nTotal: ₹${totalAmount.toFixed(2)}\nPayment: ${validPaymentType.toUpperCase()}\nStatus: ${isPaid ? 'Paid' : 'Pending'}`,
             [
               { text: 'Done', style: 'cancel' },
               {

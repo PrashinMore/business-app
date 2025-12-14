@@ -44,7 +44,7 @@ const HomeScreen: React.FC = () => {
       if (dashboard.summary) {
         loadDashboard(trendRange);
       }
-    }, [trendRange])
+    }, [trendRange, dashboard.summary, loadDashboard])
   );
 
   const handleRefresh = async () => {
