@@ -292,13 +292,13 @@ const SaleDetailsScreen: React.FC = () => {
                   <View style={styles.splitPaymentDisplay}>
                     <Text style={styles.splitPaymentLabel}>Cash:</Text>
                     <Text style={styles.splitPaymentValue}>
-                      ₹{(sale.cashAmount || 0).toFixed(2)}
+                      ₹{Number(sale.cashAmount || 0).toFixed(2)}
                     </Text>
                   </View>
                   <View style={styles.splitPaymentDisplay}>
                     <Text style={styles.splitPaymentLabel}>UPI:</Text>
                     <Text style={styles.splitPaymentValue}>
-                      ₹{(sale.upiAmount || 0).toFixed(2)}
+                      ₹{Number(sale.upiAmount || 0).toFixed(2)}
                     </Text>
                   </View>
                   <TouchableOpacity
