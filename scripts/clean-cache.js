@@ -13,6 +13,9 @@ const dirsToRemove = [
   'android/build',
   '.expo',
   'node_modules/.cache',
+  // CMake cache directory (fixes bug 255965912)
+  'android/app/.cxx',
+  'android/.cxx',
   // Metro bundler cache locations
   path.join(os.homedir(), '.metro'),
   path.join(os.homedir(), '.expo'),
@@ -71,6 +74,26 @@ try {
 } catch (error) {
   console.log('⚠️  Metro cache clear had issues (continuing anyway)');
 }
+
+// Clean node_modules codegen directories (can cause CMake issues)
+console.log('\n🧹 Cleaning node_modules codegen directories...');
+const codegenDirs = [
+  'node_modules/@react-native-async-storage/async-storage/android/build/generated/source/codegen',
+  'node_modules/react-native-safe-area-context/android/build/generated/source/codegen',
+  'node_modules/react-native-screens/android/build/generated/source/codegen',
+];
+
+codegenDirs.forEach((dir) => {
+  const fullPath = path.join(process.cwd(), dir);
+  if (fs.existsSync(fullPath)) {
+    try {
+      console.log(`Removing: ${dir}`);
+      fs.rmSync(fullPath, { recursive: true, force: true });
+    } catch (error) {
+      console.log(`⚠️  Could not remove ${dir}: ${error.message}`);
+    }
+  }
+});
 
 // Clean Gradle cache
 console.log('\n🧹 Cleaning Gradle cache...');
