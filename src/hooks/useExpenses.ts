@@ -17,6 +17,7 @@ interface UseExpensesOptions {
 interface UseExpensesReturn {
   // Data
   expenses: Expense[];
+  totalItems: number; // Total count for pagination
   monthlySummary: MonthlySummary[];
   expenseReport: ExpenseReport | null;
 
@@ -48,6 +49,7 @@ export function useExpenses(options: UseExpensesOptions = {}): UseExpensesReturn
 
   // Data state
   const [expenses, setExpenses] = useState<Expense[]>([]);
+  const [totalItems, setTotalItems] = useState<number>(0);
   const [monthlySummary, setMonthlySummary] = useState<MonthlySummary[]>([]);
   const [expenseReport, setExpenseReport] = useState<ExpenseReport | null>(null);
 
@@ -70,7 +72,15 @@ export function useExpenses(options: UseExpensesOptions = {}): UseExpensesReturn
       setLoading(true);
       setError(null);
       const data = await expensesApi.getExpenses(expenseFilters);
-      setExpenses(data);
+      
+      // Handle paginated response or legacy array format
+      if (Array.isArray(data)) {
+        setExpenses(data);
+        setTotalItems(data.length);
+      } else {
+        setExpenses(data.expenses);
+        setTotalItems(data.total);
+      }
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Failed to load expenses';
       setError(errorMessage);
@@ -169,11 +179,13 @@ export function useExpenses(options: UseExpensesOptions = {}): UseExpensesReturn
     if (autoLoad) {
       loadExpenses(filters);
     }
-  }, [filters?.from, filters?.to, filters?.category, autoLoad]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filters?.from, filters?.to, filters?.category, filters?.page, filters?.size, autoLoad]);
 
   return {
     // Data
     expenses,
+    totalItems,
     monthlySummary,
     expenseReport,
 

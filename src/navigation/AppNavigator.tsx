@@ -21,6 +21,7 @@ import CategoryFormScreen from '../screens/CategoryFormScreen';
 import CategoryDetailsScreen from '../screens/CategoryDetailsScreen';
 import InvitesScreen from '../screens/InvitesScreen';
 import PrintBillScreen, { BillData } from '../screens/PrintBillScreen';
+import TablesListScreen from '../screens/TablesListScreen';
 import MainTabNavigator from './MainTabNavigator';
 
 export type RootStackParamList = {
@@ -47,6 +48,7 @@ export type RootStackParamList = {
   CategoryForm: { category?: any } | undefined;
   CategoryDetails: { category: any } | undefined;
   Invites: undefined;
+  TablesList: undefined;
 };
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
@@ -185,6 +187,11 @@ const AppNavigator: React.FC = () => {
           name="Invites"
           component={InvitesScreen}
           options={{ headerShown: true, title: 'Invites' }}
+        />
+        <Stack.Screen
+          name="TablesList"
+          component={TablesListScreen}
+          options={{ headerShown: true, title: 'Tables' }}
         />
       </Stack.Navigator>
     </NavigationContainer>

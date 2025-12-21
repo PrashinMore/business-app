@@ -32,19 +32,32 @@ const HomeScreen: React.FC = () => {
   const cartItemCount = getCartItemCount();
   const cartTotal = getTotalAmount();
 
+  // Use ref to track if dashboard has been loaded to avoid infinite loops
+  const hasLoadedRef = React.useRef(false);
+  const isLoadingRef = React.useRef(false);
+
   // Load dashboard on mount and when trend range changes
   useEffect(() => {
-    loadDashboard(trendRange);
-  }, [trendRange]);
+    if (!isLoadingRef.current) {
+      isLoadingRef.current = true;
+      loadDashboard(trendRange).finally(() => {
+        isLoadingRef.current = false;
+        hasLoadedRef.current = true;
+      });
+    }
+  }, [trendRange, loadDashboard]);
 
-  // Refresh when screen comes into focus
+  // Refresh when screen comes into focus (only if already loaded once and not currently loading)
   useFocusEffect(
     React.useCallback(() => {
-      // Only refresh if we have data (not initial load)
-      if (dashboard.summary) {
-        loadDashboard(trendRange);
+      // Only refresh if we have already loaded data at least once and not currently loading
+      if (hasLoadedRef.current && !isLoadingRef.current) {
+        isLoadingRef.current = true;
+        loadDashboard(trendRange).finally(() => {
+          isLoadingRef.current = false;
+        });
       }
-    }, [trendRange, dashboard.summary, loadDashboard])
+    }, [trendRange, loadDashboard])
   );
 
   const handleRefresh = async () => {

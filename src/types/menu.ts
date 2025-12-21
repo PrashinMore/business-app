@@ -32,11 +32,16 @@ export interface Sale {
   id: string;
   date: string;
   items: SaleItem[];
-  totalAmount: number;
+  totalAmount: number | string; // Can be number or string (API returns string for some endpoints)
   soldBy: string;
-  paymentType: string;
+  paymentType: 'cash' | 'UPI' | 'mixed' | string;
+  cashAmount?: string | number;
+  upiAmount?: string | number;
   isPaid: boolean;
+  tableId?: string | null;
   organizationId: string;
+  openedAt?: string | null;
+  closedAt?: string | null;
   createdAt: string;
 }
 
@@ -51,5 +56,6 @@ export interface CreateSaleRequest {
   soldBy: string;
   paymentType?: 'cash' | 'UPI';
   isPaid?: boolean;
+  tableId?: string; // Optional table ID to assign table during sale creation
 }
 

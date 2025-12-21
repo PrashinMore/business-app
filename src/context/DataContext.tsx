@@ -41,6 +41,7 @@ interface DashboardData {
 
 interface SalesData {
   sales: Sale[];
+  total: number; // Total count for pagination
   paymentTotals: PaymentTypeTotals | null;
 }
 
@@ -88,6 +89,7 @@ const defaultDashboard: DashboardData = {
 
 const defaultSalesData: SalesData = {
   sales: [],
+  total: 0,
   paymentTotals: null,
 };
 
@@ -265,6 +267,7 @@ export const DataProvider: React.FC<DataProviderProps> = ({ children }) => {
       if (cachedSales || cachedTotals) {
         setSalesData({
           sales: cachedSales?.data || [],
+          total: Array.isArray(cachedSales?.data) ? cachedSales.data.length : 0,
           paymentTotals: cachedTotals?.data || null,
         });
         setSalesLoading(false);
@@ -276,7 +279,7 @@ export const DataProvider: React.FC<DataProviderProps> = ({ children }) => {
 
     // Fetch fresh data from API
     try {
-      const [salesList, totals] = await Promise.all([
+      const [salesListResponse, totals] = await Promise.all([
         salesApi.listSales(filters || {}),
         salesApi.getPaymentTypeTotals({
           from: filters?.from,
@@ -286,14 +289,24 @@ export const DataProvider: React.FC<DataProviderProps> = ({ children }) => {
         }),
       ]);
 
+      // Handle paginated response or legacy array format
+      const sales = Array.isArray(salesListResponse) 
+        ? salesListResponse 
+        : salesListResponse.sales;
+      
+      const total = Array.isArray(salesListResponse)
+        ? sales.length // Legacy: use array length
+        : salesListResponse.total;
+
       setSalesData({
-        sales: salesList,
+        sales,
+        total,
         paymentTotals: totals,
       });
 
       // Update cache
       await Promise.all([
-        setCache(salesCacheKey, salesList),
+        setCache(salesCacheKey, sales),
         setCache(totalsCacheKey, totals),
       ]);
     } catch (error) {

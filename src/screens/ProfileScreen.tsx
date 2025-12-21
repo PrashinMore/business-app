@@ -132,6 +132,14 @@ const ProfileScreen: React.FC = () => {
           <Text style={styles.menuItemArrow}>›</Text>
         </TouchableOpacity>
 
+        <TouchableOpacity
+          style={styles.menuItem}
+          onPress={() => navigation.navigate('TablesList')}
+        >
+          <Text style={styles.menuItemText}>🪑 Tables</Text>
+          <Text style={styles.menuItemArrow}>›</Text>
+        </TouchableOpacity>
+
         {user?.role === 'admin' && (
           <TouchableOpacity
             style={styles.menuItem}

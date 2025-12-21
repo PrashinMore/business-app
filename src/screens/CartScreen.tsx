@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import {
   View,
   Text,
@@ -9,6 +9,7 @@ import {
   ActivityIndicator,
   ScrollView,
   Image,
+  Modal,
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -21,6 +22,8 @@ import { CartItem } from '../types/menu';
 import { API_BASE_URL } from '../config/api';
 import { RootStackParamList } from '../navigation/AppNavigator';
 import { BillData, BillItem } from './PrintBillScreen';
+import { getTables } from '../services/tables';
+import { DiningTable } from '../types/tables';
 
 type CartScreenNavigationProp = NativeStackNavigationProp<RootStackParamList>;
 
@@ -33,9 +36,37 @@ const CartScreen: React.FC = () => {
   const [checkingOut, setCheckingOut] = useState(false);
   const [paymentType, setPaymentType] = useState<'cash' | 'UPI'>('cash');
   const [isPaid, setIsPaid] = useState(false);
+  const [selectedTableId, setSelectedTableId] = useState<string | null>(null);
+  const [tables, setTables] = useState<DiningTable[]>([]);
+  const [showTablePicker, setShowTablePicker] = useState(false);
+  const [loadingTables, setLoadingTables] = useState(false);
   
   // Ref to track if we should print after checkout
   const printAfterCheckoutRef = useRef(false);
+
+  // NOTE: Cart state should NEVER be cleared when table selection changes.
+  // Only clearCart() should be called after successful checkout.
+  // Any table dropdown/selection logic should NOT affect the cart state.
+
+  // Load tables on mount
+  useEffect(() => {
+    loadTables();
+  }, []);
+
+  const loadTables = async () => {
+    try {
+      setLoadingTables(true);
+      const data = await getTables();
+      setTables(data);
+    } catch (error: any) {
+      // Silently fail - table management might not be enabled
+      console.log('Tables not available:', error.message);
+    } finally {
+      setLoadingTables(false);
+    }
+  };
+
+  const selectedTable = tables.find(t => t.id === selectedTableId);
 
   const handleUpdateQuantity = (productId: string, change: number) => {
     const cartItem = cart.find(item => item.productId === productId);
@@ -102,6 +133,7 @@ const CartScreen: React.FC = () => {
         soldBy: user.id,
         paymentType: validPaymentType,
         isPaid,
+        ...(selectedTableId && { tableId: selectedTableId }),
       };
 
       const sale = await checkout(saleData);
@@ -270,6 +302,30 @@ const CartScreen: React.FC = () => {
         contentContainerStyle={styles.listContent}
         ListFooterComponent={
           <View style={styles.checkoutSection}>
+            {/* Table Selection */}
+            {tables.length > 0 && (
+              <View style={styles.tableSection}>
+                <Text style={styles.paymentTypeLabel}>Table (Optional):</Text>
+                <TouchableOpacity
+                  style={styles.tablePicker}
+                  onPress={() => setShowTablePicker(true)}
+                >
+                  <Text style={[styles.tablePickerText, !selectedTable && styles.tablePickerPlaceholder]}>
+                    {selectedTable ? `${selectedTable.name} (${selectedTable.status})` : 'Select Table'}
+                  </Text>
+                  <Text style={styles.tablePickerArrow}>▼</Text>
+                </TouchableOpacity>
+                {selectedTableId && (
+                  <TouchableOpacity
+                    style={styles.clearTableButton}
+                    onPress={() => setSelectedTableId(null)}
+                  >
+                    <Text style={styles.clearTableButtonText}>Clear</Text>
+                  </TouchableOpacity>
+                )}
+              </View>
+            )}
+
             <View style={styles.paymentTypeSection}>
               <Text style={styles.paymentTypeLabel}>Payment Method:</Text>
               <View style={styles.paymentTypeButtons}>
@@ -422,6 +478,72 @@ const CartScreen: React.FC = () => {
           </View>
         }
       />
+
+      {/* Table Picker Modal */}
+      <Modal
+        visible={showTablePicker}
+        transparent={true}
+        animationType="slide"
+        onRequestClose={() => setShowTablePicker(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Select Table</Text>
+              <TouchableOpacity
+                onPress={() => setShowTablePicker(false)}
+                style={styles.modalCloseButton}
+              >
+                <Text style={styles.modalCloseText}>✕</Text>
+              </TouchableOpacity>
+            </View>
+            <FlatList
+              data={tables}
+              keyExtractor={(item) => item.id}
+              renderItem={({ item }) => (
+                <TouchableOpacity
+                  style={[
+                    styles.tableOption,
+                    selectedTableId === item.id && styles.tableOptionSelected,
+                  ]}
+                  onPress={() => {
+                    setSelectedTableId(item.id);
+                    setShowTablePicker(false);
+                  }}
+                >
+                  <View>
+                    <Text style={styles.tableOptionName}>{item.name}</Text>
+                    {item.area && <Text style={styles.tableOptionArea}>{item.area}</Text>}
+                    <Text style={styles.tableOptionInfo}>
+                      Capacity: {item.capacity} • {item.status}
+                    </Text>
+                  </View>
+                  {selectedTableId === item.id && (
+                    <Text style={styles.tableOptionCheck}>✓</Text>
+                  )}
+                </TouchableOpacity>
+              )}
+              ListHeaderComponent={
+                <TouchableOpacity
+                  style={[
+                    styles.tableOption,
+                    !selectedTableId && styles.tableOptionSelected,
+                  ]}
+                  onPress={() => {
+                    setSelectedTableId(null);
+                    setShowTablePicker(false);
+                  }}
+                >
+                  <Text style={styles.tableOptionName}>No Table</Text>
+                  {!selectedTableId && (
+                    <Text style={styles.tableOptionCheck}>✓</Text>
+                  )}
+                </TouchableOpacity>
+              }
+            />
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 };
@@ -698,6 +820,112 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 12,
     fontWeight: '600',
+  },
+  tableSection: {
+    marginBottom: 16,
+  },
+  tablePicker: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    backgroundColor: '#f5f5f5',
+    borderRadius: 8,
+    padding: 12,
+    borderWidth: 1,
+    borderColor: '#ddd',
+  },
+  tablePickerText: {
+    fontSize: 16,
+    color: '#333',
+    flex: 1,
+  },
+  tablePickerPlaceholder: {
+    color: '#999',
+  },
+  tablePickerArrow: {
+    fontSize: 12,
+    color: '#666',
+    marginLeft: 8,
+  },
+  clearTableButton: {
+    marginTop: 8,
+    alignSelf: 'flex-end',
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+  },
+  clearTableButtonText: {
+    color: '#F44336',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'flex-end',
+  },
+  modalContent: {
+    backgroundColor: '#fff',
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    maxHeight: '80%',
+    paddingBottom: 20,
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 20,
+    borderBottomWidth: 1,
+    borderBottomColor: '#e0e0e0',
+  },
+  modalTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#333',
+  },
+  modalCloseButton: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: '#f0f0f0',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  modalCloseText: {
+    fontSize: 18,
+    color: '#666',
+    fontWeight: 'bold',
+  },
+  tableOption: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f0f0f0',
+  },
+  tableOptionSelected: {
+    backgroundColor: '#e3f2fd',
+  },
+  tableOptionName: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#333',
+    marginBottom: 4,
+  },
+  tableOptionArea: {
+    fontSize: 14,
+    color: '#666',
+    marginBottom: 4,
+  },
+  tableOptionInfo: {
+    fontSize: 12,
+    color: '#999',
+  },
+  tableOptionCheck: {
+    fontSize: 18,
+    color: '#007AFF',
+    fontWeight: 'bold',
   },
 });
 

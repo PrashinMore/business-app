@@ -16,9 +16,11 @@ import {
 } from '../types/expenses';
 
 /**
- * Get all expenses with optional filters
+ * Get all expenses with optional filters and pagination
+ * @param filters - Optional filters for date range, category, and pagination
+ * @returns Promise with paginated expenses response or array of expenses (backward compatibility)
  */
-export async function getExpenses(filters?: ExpenseFilters): Promise<Expense[]> {
+export async function getExpenses(filters?: ExpenseFilters): Promise<{ expenses: Expense[]; total: number } | Expense[]> {
   try {
     const queryParams = new URLSearchParams();
 
@@ -30,6 +32,12 @@ export async function getExpenses(filters?: ExpenseFilters): Promise<Expense[]> 
     }
     if (filters?.category) {
       queryParams.append('category', filters.category);
+    }
+    if (filters?.page !== undefined) {
+      queryParams.append('page', filters.page.toString());
+    }
+    if (filters?.size !== undefined) {
+      queryParams.append('size', filters.size.toString());
     }
 
     const queryString = queryParams.toString();
@@ -44,8 +52,20 @@ export async function getExpenses(filters?: ExpenseFilters): Promise<Expense[]> 
       throw new Error(error.message || 'Failed to load expenses');
     }
 
-    const expensesData: any[] = await response.json();
-    // Convert amount strings to numbers
+    const data = await response.json();
+    
+    // Check if response is paginated (has expenses and total) or legacy format (array)
+    if (data && typeof data === 'object' && 'expenses' in data && 'total' in data) {
+      // Convert amount strings to numbers
+      const expenses: Expense[] = data.expenses.map((expense: any) => ({
+        ...expense,
+        amount: parseFloat(expense.amount.toString()) || 0,
+      }));
+      return { expenses, total: data.total };
+    }
+    
+    // Backward compatibility: return as array if legacy format
+    const expensesData: any[] = Array.isArray(data) ? data : [];
     const expenses: Expense[] = expensesData.map(expense => ({
       ...expense,
       amount: parseFloat(expense.amount.toString()) || 0,

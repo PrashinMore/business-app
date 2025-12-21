@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -25,6 +25,10 @@ const ExpensesListScreen: React.FC = () => {
   const [showFilters, setShowFilters] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
 
+  // Pagination state
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize] = useState(20); // Fixed page size
+
   // Filter states
   const [fromDate, setFromDate] = useState('');
   const [toDate, setToDate] = useState('');
@@ -38,6 +42,7 @@ const ExpensesListScreen: React.FC = () => {
   // Use the expenses hook
   const {
     expenses,
+    totalItems,
     loading,
     error,
     createExpense,
@@ -49,15 +54,53 @@ const ExpensesListScreen: React.FC = () => {
     autoLoad: true,
   });
 
+  // Calculate total pages
+  const totalPages = Math.ceil(totalItems / pageSize);
+
+  // Track if filters have changed to reset page
+  const prevFiltersRef = useRef({ fromDate, toDate, category });
+  const isInitialMount = useRef(true);
+
   // Apply filters when they change
   useEffect(() => {
+    // Skip on initial mount - let useExpenses handle initial load
+    if (isInitialMount.current) {
+      isInitialMount.current = false;
+      // Set initial filters without triggering page reset
+      const filters: ExpenseFilters = {};
+      if (fromDate) filters.from = fromDate;
+      if (toDate) filters.to = toDate;
+      if (category) filters.category = category;
+      filters.page = currentPage;
+      filters.size = pageSize;
+      setFilters(filters);
+      prevFiltersRef.current = { fromDate, toDate, category };
+      return;
+    }
+
+    // Check if filters (excluding pagination) have changed
+    const filtersChanged = 
+      prevFiltersRef.current.fromDate !== fromDate ||
+      prevFiltersRef.current.toDate !== toDate ||
+      prevFiltersRef.current.category !== category;
+
+    // Reset to page 1 if filters changed
+    if (filtersChanged) {
+      setCurrentPage(1);
+      prevFiltersRef.current = { fromDate, toDate, category };
+    }
+
     const filters: ExpenseFilters = {};
     if (fromDate) filters.from = fromDate;
     if (toDate) filters.to = toDate;
     if (category) filters.category = category;
+    // Add pagination - use 1 if filters changed, otherwise currentPage
+    filters.page = filtersChanged ? 1 : currentPage;
+    filters.size = pageSize;
 
     setFilters(filters);
-  }, [fromDate, toDate, category]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [fromDate, toDate, category, currentPage, pageSize]);
 
   const handleRefresh = async () => {
     setRefreshing(true);
@@ -72,7 +115,26 @@ const ExpensesListScreen: React.FC = () => {
     setSearchTerm('');
     setFromDatePickerVisible(false);
     setToDatePickerVisible(false);
+    setCurrentPage(1);
     clearError();
+  };
+
+  // Pagination handlers
+  const handleNextPage = () => {
+    if (currentPage < totalPages && !loading) {
+      setCurrentPage(currentPage + 1);
+    }
+  };
+
+  const handlePreviousPage = () => {
+    if (currentPage > 1 && !loading) {
+      setCurrentPage(currentPage - 1);
+    }
+  };
+
+  // Reset to page 1 when filters change (excluding pagination)
+  const handleFilterChange = () => {
+    setCurrentPage(1);
   };
 
   const showFromDatePicker = () => {
@@ -276,7 +338,7 @@ const ExpensesListScreen: React.FC = () => {
           </ScrollView>
 
           <View style={styles.filterActions}>
-            <TouchableOpacity style={styles.applyButton} onPress={() => {}}>
+            <TouchableOpacity style={styles.applyButton} onPress={handleFilterChange}>
               <Text style={styles.applyButtonText}>Apply Filters</Text>
             </TouchableOpacity>
             <TouchableOpacity style={styles.resetButton} onPress={resetFilters}>
@@ -314,6 +376,49 @@ const ExpensesListScreen: React.FC = () => {
               <Text style={styles.addExpensePromptText}>Add your first expense</Text>
             </TouchableOpacity>
           </View>
+        }
+        ListFooterComponent={
+          totalPages > 1 ? (
+            <View style={styles.paginationContainer}>
+              <TouchableOpacity
+                style={[
+                  styles.paginationButton,
+                  (currentPage === 1 || loading) && styles.paginationButtonDisabled,
+                ]}
+                onPress={handlePreviousPage}
+                disabled={currentPage === 1 || loading}
+              >
+                <Text
+                  style={[
+                    styles.paginationButtonText,
+                    (currentPage === 1 || loading) && styles.paginationButtonTextDisabled,
+                  ]}
+                >
+                  Previous
+                </Text>
+              </TouchableOpacity>
+              <Text style={styles.paginationInfo}>
+                Page {currentPage} of {totalPages}
+              </Text>
+              <TouchableOpacity
+                style={[
+                  styles.paginationButton,
+                  (currentPage >= totalPages || loading) && styles.paginationButtonDisabled,
+                ]}
+                onPress={handleNextPage}
+                disabled={currentPage >= totalPages || loading}
+              >
+                <Text
+                  style={[
+                    styles.paginationButtonText,
+                    (currentPage >= totalPages || loading) && styles.paginationButtonTextDisabled,
+                  ]}
+                >
+                  Next
+                </Text>
+              </TouchableOpacity>
+            </View>
+          ) : null
         }
         contentContainerStyle={styles.listContainer}
       />
@@ -639,6 +744,42 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 14,
     fontWeight: '600',
+  },
+  paginationContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 16,
+    paddingHorizontal: 16,
+    backgroundColor: '#fff',
+    borderTopWidth: 1,
+    borderTopColor: '#e0e0e0',
+    marginTop: 8,
+  },
+  paginationButton: {
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    borderRadius: 8,
+    backgroundColor: '#007AFF',
+    minWidth: 80,
+    alignItems: 'center',
+  },
+  paginationButtonDisabled: {
+    backgroundColor: '#e0e0e0',
+    opacity: 0.5,
+  },
+  paginationButtonText: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  paginationButtonTextDisabled: {
+    color: '#999',
+  },
+  paginationInfo: {
+    fontSize: 14,
+    color: '#666',
+    fontWeight: '500',
   },
 });
 

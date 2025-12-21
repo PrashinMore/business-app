@@ -25,6 +25,11 @@ const SalesListScreen: React.FC = () => {
   
   const [showFilters, setShowFilters] = useState(false);
 
+  // Pagination state
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize] = useState(20); // Fixed page size
+  const [totalItems, setTotalItems] = useState(0);
+
   // Filter states
   const [fromDate, setFromDate] = useState('');
   const [toDate, setToDate] = useState('');
@@ -37,19 +42,32 @@ const SalesListScreen: React.FC = () => {
   const [isToDatePickerVisible, setToDatePickerVisible] = useState(false);
 
   // Build filters object
-  const buildFilters = (): SalesFilters => {
+  const buildFilters = (page?: number): SalesFilters => {
     const filters: SalesFilters = {};
     if (fromDate) filters.from = fromDate;
     if (toDate) filters.to = toDate;
     if (productId) filters.productId = productId;
     if (staff) filters.staff = staff;
     if (paymentType) filters.paymentType = paymentType;
+    // Add pagination
+    filters.page = page !== undefined ? page : currentPage;
+    filters.size = pageSize;
     return filters;
   };
 
+  // Calculate total pages
+  const totalPages = Math.ceil(totalItems / pageSize);
+
+  // Update total items from salesData
+  useEffect(() => {
+    if (salesData.total !== undefined) {
+      setTotalItems(salesData.total);
+    }
+  }, [salesData.total]);
+
   // Initial load
   useEffect(() => {
-    loadSales(buildFilters());
+    loadSales(buildFilters(1));
   }, []);
 
   // Refresh when screen comes into focus
@@ -57,17 +75,37 @@ const SalesListScreen: React.FC = () => {
     React.useCallback(() => {
       // Only refresh if we have data (not initial load)
       if (salesData.sales.length > 0 || salesData.paymentTotals) {
-        loadSales(buildFilters());
+        loadSales(buildFilters(currentPage));
       }
-    }, [fromDate, toDate, productId, staff, paymentType])
+    }, [fromDate, toDate, productId, staff, paymentType, currentPage])
   );
 
-  const handleLoadSales = async () => {
-    await loadSales(buildFilters());
+  const handleLoadSales = async (page: number = 1) => {
+    setCurrentPage(page);
+    await loadSales(buildFilters(page));
   };
 
   const handleRefresh = async () => {
-    await loadSales(buildFilters(), true);
+    await loadSales(buildFilters(currentPage), true);
+  };
+
+  // Pagination handlers
+  const handleNextPage = () => {
+    if (currentPage < totalPages && !loading) {
+      handleLoadSales(currentPage + 1);
+    }
+  };
+
+  const handlePreviousPage = () => {
+    if (currentPage > 1 && !loading) {
+      handleLoadSales(currentPage - 1);
+    }
+  };
+
+  // Reset to page 1 when filters change (excluding pagination)
+  const handleFilterChange = () => {
+    setCurrentPage(1);
+    handleLoadSales(1);
   };
 
   // Extract data from context
@@ -84,8 +122,9 @@ const SalesListScreen: React.FC = () => {
     setPaymentType('');
     setFromDatePickerVisible(false);
     setToDatePickerVisible(false);
+    setCurrentPage(1);
     // Load with empty filters after state updates
-    setTimeout(() => loadSales({}), 100);
+    setTimeout(() => loadSales(buildFilters(1)), 100);
   };
 
   const showFromDatePicker = () => {
@@ -275,7 +314,7 @@ const SalesListScreen: React.FC = () => {
           </View>
 
           <View style={styles.filterActions}>
-            <TouchableOpacity style={styles.applyButton} onPress={handleLoadSales}>
+            <TouchableOpacity style={styles.applyButton} onPress={handleFilterChange}>
               <Text style={styles.applyButtonText}>Apply Filters</Text>
             </TouchableOpacity>
             <TouchableOpacity style={styles.resetButton} onPress={resetFilters}>
@@ -335,8 +374,53 @@ const SalesListScreen: React.FC = () => {
         }
         ListHeaderComponent={
           <View style={styles.header}>
-            <Text style={styles.headerTitle}>Sales ({sales.length})</Text>
+            <Text style={styles.headerTitle}>
+              Sales ({totalItems > 0 ? totalItems : sales.length})
+            </Text>
           </View>
+        }
+        ListFooterComponent={
+          totalPages > 1 ? (
+            <View style={styles.paginationContainer}>
+              <TouchableOpacity
+                style={[
+                  styles.paginationButton,
+                  (currentPage === 1 || loading) && styles.paginationButtonDisabled,
+                ]}
+                onPress={handlePreviousPage}
+                disabled={currentPage === 1 || loading}
+              >
+                <Text
+                  style={[
+                    styles.paginationButtonText,
+                    (currentPage === 1 || loading) && styles.paginationButtonTextDisabled,
+                  ]}
+                >
+                  Previous
+                </Text>
+              </TouchableOpacity>
+              <Text style={styles.paginationInfo}>
+                Page {currentPage} of {totalPages}
+              </Text>
+              <TouchableOpacity
+                style={[
+                  styles.paginationButton,
+                  (currentPage >= totalPages || loading) && styles.paginationButtonDisabled,
+                ]}
+                onPress={handleNextPage}
+                disabled={currentPage >= totalPages || loading}
+              >
+                <Text
+                  style={[
+                    styles.paginationButtonText,
+                    (currentPage >= totalPages || loading) && styles.paginationButtonTextDisabled,
+                  ]}
+                >
+                  Next
+                </Text>
+              </TouchableOpacity>
+            </View>
+          ) : null
         }
       />
 
@@ -635,6 +719,42 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#999',
     textAlign: 'center',
+  },
+  paginationContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 16,
+    paddingHorizontal: 16,
+    backgroundColor: '#fff',
+    borderTopWidth: 1,
+    borderTopColor: '#e0e0e0',
+    marginTop: 8,
+  },
+  paginationButton: {
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    borderRadius: 8,
+    backgroundColor: '#007AFF',
+    minWidth: 80,
+    alignItems: 'center',
+  },
+  paginationButtonDisabled: {
+    backgroundColor: '#e0e0e0',
+    opacity: 0.5,
+  },
+  paginationButtonText: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  paginationButtonTextDisabled: {
+    color: '#999',
+  },
+  paginationInfo: {
+    fontSize: 14,
+    color: '#666',
+    fontWeight: '500',
   },
 });
 

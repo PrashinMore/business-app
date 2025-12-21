@@ -8,11 +8,11 @@ import { apiRequest } from './auth';
 import { Sale, SalesFilters, DailyTotal, PaymentTypeTotals } from '../types/sales';
 
 /**
- * List sales with optional filters
- * @param filters - Optional filters for date range, product, staff, payment type
- * @returns Promise with array of sales
+ * List sales with optional filters and pagination
+ * @param filters - Optional filters for date range, product, staff, payment type, and pagination
+ * @returns Promise with paginated sales response or array of sales (backward compatibility)
  */
-export async function listSales(filters: SalesFilters = {}): Promise<Sale[]> {
+export async function listSales(filters: SalesFilters = {}): Promise<{ sales: Sale[]; total: number } | Sale[]> {
   try {
     const params = new URLSearchParams();
     if (filters.from) params.set('from', filters.from);
@@ -20,6 +20,8 @@ export async function listSales(filters: SalesFilters = {}): Promise<Sale[]> {
     if (filters.productId) params.set('productId', filters.productId);
     if (filters.staff) params.set('staff', filters.staff);
     if (filters.paymentType) params.set('paymentType', filters.paymentType);
+    if (filters.page !== undefined) params.set('page', filters.page.toString());
+    if (filters.size !== undefined) params.set('size', filters.size.toString());
 
     const queryString = params.toString();
     const url = queryString ? `/sales?${queryString}` : '/sales';
@@ -33,8 +35,15 @@ export async function listSales(filters: SalesFilters = {}): Promise<Sale[]> {
       throw new Error(error.message || 'Failed to load sales');
     }
 
-    const sales: Sale[] = await response.json();
-    return sales;
+    const data = await response.json();
+    
+    // Check if response is paginated (has sales and total) or legacy format (array)
+    if (data && typeof data === 'object' && 'sales' in data && 'total' in data) {
+      return { sales: data.sales, total: data.total };
+    }
+    
+    // Backward compatibility: return as array if legacy format
+    return data as Sale[];
   } catch (error) {
     console.error('List sales error:', error);
     throw error;
