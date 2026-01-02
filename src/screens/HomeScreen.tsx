@@ -16,6 +16,8 @@ import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../context/AuthContext';
 import { useCart } from '../context/CartContext';
 import { useData } from '../context/DataContext';
+import { useOutlet } from '../context/OutletContext';
+import { OutletSelector } from '../components/OutletSelector';
 import { RootStackParamList } from '../navigation/AppNavigator';
 import { SalesTrendRange } from '../types/dashboard';
 import { API_BASE_URL } from '../config/api';
@@ -28,6 +30,7 @@ const HomeScreen: React.FC = () => {
   const { user } = useAuth();
   const { getCartItemCount, getTotalAmount } = useCart();
   const { dashboard, dashboardLoading, dashboardRefreshing, loadDashboard } = useData();
+  const { outlets, selectedOutlet, selectOutlet } = useOutlet();
   
   const [trendRange, setTrendRange] = useState<SalesTrendRange>('7days');
 
@@ -117,6 +120,13 @@ const HomeScreen: React.FC = () => {
         <Text style={styles.welcomeText}>Welcome back,</Text>
         <Text style={styles.nameText}>{user.name}</Text>
       </View>
+
+      {/* Outlet Selector */}
+      <OutletSelector
+        outlets={outlets}
+        selectedOutlet={selectedOutlet}
+        onSelect={selectOutlet}
+      />
 
       {/* Quick Stats - Cart */}
       <View style={styles.quickStatsContainer}>

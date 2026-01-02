@@ -245,7 +245,7 @@ export async function checkout(saleData: CreateSaleRequest): Promise<Sale | { id
     const response = await apiRequest('/sales', {
       method: 'POST',
       body: JSON.stringify(saleData),
-    });
+    }, true); // requiresOutlet: true
 
     if (!response.ok) {
       const error = await response.json();

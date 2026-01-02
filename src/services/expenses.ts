@@ -45,7 +45,7 @@ export async function getExpenses(filters?: ExpenseFilters): Promise<{ expenses:
 
     const response = await apiRequest(endpoint, {
       method: 'GET',
-    });
+    }, true); // requiresOutlet: true
 
     if (!response.ok) {
       const error = await response.json();
@@ -85,7 +85,7 @@ export async function createExpense(expenseData: CreateExpenseData): Promise<Exp
     const response = await apiRequest('/expenses', {
       method: 'POST',
       body: JSON.stringify(expenseData),
-    });
+    }, true); // requiresOutlet: true
 
     if (!response.ok) {
       const error = await response.json();
@@ -116,7 +116,7 @@ export async function updateExpense(
     const response = await apiRequest(`/expenses/${expenseId}`, {
       method: 'PATCH',
       body: JSON.stringify(expenseData),
-    });
+    }, true); // requiresOutlet: true
 
     if (!response.ok) {
       const error = await response.json();
@@ -143,7 +143,7 @@ export async function deleteExpense(expenseId: string): Promise<void> {
   try {
     const response = await apiRequest(`/expenses/${expenseId}`, {
       method: 'DELETE',
-    });
+    }, true); // requiresOutlet: true
 
     if (!response.ok) {
       const error = await response.json();
@@ -177,7 +177,7 @@ export async function getMonthlySummary(
 
     const response = await apiRequest(endpoint, {
       method: 'GET',
-    });
+    }, true); // requiresOutlet: true
 
     if (!response.ok) {
       const error = await response.json();
@@ -214,7 +214,7 @@ export async function getExpenseReport(
 
     const response = await apiRequest(endpoint, {
       method: 'GET',
-    });
+    }, true); // requiresOutlet: true
 
     if (!response.ok) {
       const error = await response.json();

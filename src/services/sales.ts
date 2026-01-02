@@ -28,7 +28,7 @@ export async function listSales(filters: SalesFilters = {}): Promise<{ sales: Sa
 
     const response = await apiRequest(url, {
       method: 'GET',
-    });
+    }, true); // requiresOutlet: true
 
     if (!response.ok) {
       const error = await response.json();
@@ -59,7 +59,7 @@ export async function getSaleDetails(saleId: string): Promise<Sale> {
   try {
     const response = await apiRequest(`/sales/${saleId}`, {
       method: 'GET',
-    });
+    }, true); // requiresOutlet: true
 
     if (!response.ok) {
       const error = await response.json();
@@ -91,7 +91,7 @@ export async function getDailyTotals(from?: string, to?: string): Promise<DailyT
 
     const response = await apiRequest(url, {
       method: 'GET',
-    });
+    }, true); // requiresOutlet: true
 
     if (!response.ok) {
       const error = await response.json();
@@ -129,7 +129,7 @@ export async function getPaymentTypeTotals(
 
     const response = await apiRequest(url, {
       method: 'GET',
-    });
+    }, true); // requiresOutlet: true
 
     if (!response.ok) {
       const error = await response.json();
@@ -163,7 +163,7 @@ export async function updateSalePayment(
     const response = await apiRequest(`/sales/${saleId}`, {
       method: 'PATCH',
       body: JSON.stringify(updates),
-    });
+    }, true); // requiresOutlet: true
 
     if (!response.ok) {
       const error = await response.json();

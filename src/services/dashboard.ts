@@ -22,7 +22,7 @@ export async function getDashboardSummary(): Promise<DashboardSummary> {
   try {
     const response = await apiRequest('/dashboard/summary', {
       method: 'GET',
-    });
+    }, true); // requiresOutlet: true
 
     if (!response.ok) {
       const error = await response.json();
@@ -46,7 +46,7 @@ export async function getSalesTrend(range: SalesTrendRange = '7days'): Promise<S
   try {
     const response = await apiRequest(`/dashboard/sales-trend?range=${range}`, {
       method: 'GET',
-    });
+    }, true); // requiresOutlet: true
 
     if (!response.ok) {
       const error = await response.json();
@@ -70,7 +70,7 @@ export async function getTopProducts(limit: number = 5): Promise<TopProduct[]> {
   try {
     const response = await apiRequest(`/dashboard/top-products?limit=${limit}`, {
       method: 'GET',
-    });
+    }, true); // requiresOutlet: true
 
     if (!response.ok) {
       const error = await response.json();
@@ -93,7 +93,7 @@ export async function getLowStockAlerts(): Promise<LowStockItem[]> {
   try {
     const response = await apiRequest('/dashboard/low-stock', {
       method: 'GET',
-    });
+    }, true); // requiresOutlet: true
 
     if (!response.ok) {
       const error = await response.json();
@@ -116,7 +116,7 @@ export async function getExpensesSummary(): Promise<ExpenseSummary[]> {
   try {
     const response = await apiRequest('/dashboard/expenses-summary', {
       method: 'GET',
-    });
+    }, true); // requiresOutlet: true
 
     if (!response.ok) {
       const error = await response.json();

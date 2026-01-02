@@ -279,14 +279,28 @@ export async function getStoredUser(): Promise<User | null> {
 }
 
 /**
+ * Get stored outlet ID
+ * @returns Promise<string | null>
+ */
+export async function getStoredOutletId(): Promise<string | null> {
+  return await AsyncStorage.getItem('selectedOutletId');
+}
+
+/**
  * Make authenticated API request
  * Automatically adds Authorization header and handles token refresh
+ * Optionally includes X-Outlet-Id header if requiresOutlet is true
  * 
  * @param endpoint - API endpoint (e.g., '/products')
  * @param options - Fetch options
+ * @param requiresOutlet - Whether to include X-Outlet-Id header (default: false)
  * @returns Promise<Response>
  */
-export async function apiRequest(endpoint: string, options: RequestInit = {}): Promise<Response> {
+export async function apiRequest(
+  endpoint: string, 
+  options: RequestInit = {},
+  requiresOutlet: boolean = false
+): Promise<Response> {
   let token = await AsyncStorage.getItem('accessToken');
 
   if (!token) {
@@ -297,13 +311,24 @@ export async function apiRequest(endpoint: string, options: RequestInit = {}): P
     ? endpoint
     : `${API_BASE_URL}${endpoint}`;
 
+  // Build headers
+  const headers: Record<string, string> = {
+    'Authorization': `Bearer ${token}`,
+    'Content-Type': 'application/json',
+    ...(options.headers as Record<string, string> || {}),
+  };
+
+  // Add outlet context if required
+  if (requiresOutlet) {
+    const outletId = await getStoredOutletId();
+    if (outletId) {
+      headers['X-Outlet-Id'] = outletId;
+    }
+  }
+
   let response = await fetch(url, {
     ...options,
-    headers: {
-      'Authorization': `Bearer ${token}`,
-      'Content-Type': 'application/json',
-      ...options.headers,
-    },
+    headers,
   });
 
   // Handle token expiration - try to refresh
@@ -318,11 +343,7 @@ export async function apiRequest(endpoint: string, options: RequestInit = {}): P
         // Retry the original request with new token
         response = await fetch(url, {
           ...options,
-          headers: {
-            'Authorization': `Bearer ${token}`,
-            'Content-Type': 'application/json',
-            ...options.headers,
-          },
+          headers,
         });
 
         // If still 401 after refresh, logout

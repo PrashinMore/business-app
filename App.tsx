@@ -7,6 +7,7 @@ import { AuthProvider } from './src/context/AuthContext';
 import { CartProvider } from './src/context/CartContext';
 import { SyncProvider } from './src/context/SyncContext';
 import { DataProvider } from './src/context/DataContext';
+import { OutletProvider } from './src/context/OutletContext';
 import AppNavigator from './src/navigation/AppNavigator';
 
 // Keep the splash screen visible while we fetch resources
@@ -32,14 +33,16 @@ export default function App() {
   return (
     <SafeAreaProvider>
       <AuthProvider>
-        <DataProvider>
-        <CartProvider>
-          <SyncProvider>
-            <StatusBar style="auto" />
-            <AppNavigator />
-          </SyncProvider>
-        </CartProvider>
-        </DataProvider>
+        <OutletProvider>
+          <DataProvider>
+            <CartProvider>
+              <SyncProvider>
+                <StatusBar style="auto" />
+                <AppNavigator />
+              </SyncProvider>
+            </CartProvider>
+          </DataProvider>
+        </OutletProvider>
       </AuthProvider>
     </SafeAreaProvider>
   );
