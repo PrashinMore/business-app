@@ -59,25 +59,19 @@ const ExpensesListScreen: React.FC = () => {
   const totalPages = Math.ceil(totalItems / pageSize);
 
   // Track if filters have changed to reset page
-  const prevFiltersRef = useRef({ fromDate, toDate, category });
+  const prevFiltersRef = useRef({ fromDate, toDate, category, currentPage });
   const isInitialMount = useRef(true);
 
   // Apply filters when they change
   useEffect(() => {
-    // Skip on initial mount - let useExpenses handle initial load
-    if (isInitialMount.current) {
-      isInitialMount.current = false;
-      // Set initial filters without triggering page reset
-      const filters: ExpenseFilters = {};
-      if (fromDate) filters.from = fromDate;
-      if (toDate) filters.to = toDate;
-      if (category) filters.category = category;
-      filters.page = currentPage;
-      filters.size = pageSize;
-      setFilters(filters);
-      prevFiltersRef.current = { fromDate, toDate, category };
-      return;
-    }
+    // Build filters object
+    const newFilters: ExpenseFilters = {
+      page: currentPage,
+      size: pageSize,
+    };
+    if (fromDate) newFilters.from = fromDate;
+    if (toDate) newFilters.to = toDate;
+    if (category) newFilters.category = category;
 
     // Check if filters (excluding pagination) have changed
     const filtersChanged = 
@@ -85,23 +79,31 @@ const ExpensesListScreen: React.FC = () => {
       prevFiltersRef.current.toDate !== toDate ||
       prevFiltersRef.current.category !== category;
 
-    // Reset to page 1 if filters changed
-    if (filtersChanged) {
+    // Reset to page 1 if filters changed (but only update currentPage if it's not already 1)
+    if (filtersChanged && currentPage !== 1) {
       setCurrentPage(1);
-      prevFiltersRef.current = { fromDate, toDate, category };
+      newFilters.page = 1;
     }
 
-    const filters: ExpenseFilters = {};
-    if (fromDate) filters.from = fromDate;
-    if (toDate) filters.to = toDate;
-    if (category) filters.category = category;
-    // Add pagination - use 1 if filters changed, otherwise currentPage
-    filters.page = filtersChanged ? 1 : currentPage;
-    filters.size = pageSize;
+    // Only update if something actually changed
+    // On initial mount, set filters but the useExpenses hook will handle the initial load
+    const hasChanged = 
+      prevFiltersRef.current.fromDate !== fromDate ||
+      prevFiltersRef.current.toDate !== toDate ||
+      prevFiltersRef.current.category !== category ||
+      prevFiltersRef.current.currentPage !== currentPage;
 
-    setFilters(filters);
+    if (hasChanged) {
+      setFilters(newFilters);
+      prevFiltersRef.current = { fromDate, toDate, category, currentPage };
+    } else if (isInitialMount.current) {
+      // On initial mount, set filters once (useExpenses will load with these)
+      isInitialMount.current = false;
+      setFilters(newFilters);
+      prevFiltersRef.current = { fromDate, toDate, category, currentPage };
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [fromDate, toDate, category, currentPage, pageSize]);
+  }, [fromDate, toDate, category, currentPage]);
 
   const handleRefresh = async () => {
     setRefreshing(true);
@@ -110,11 +112,34 @@ const ExpensesListScreen: React.FC = () => {
   };
 
   // Refresh expenses when screen comes into focus (e.g., when returning from ExpenseForm)
+  // Only refresh when returning from another screen, not on initial mount
+  const hasMountedRef = useRef(false);
+  const refreshExpensesRef = useRef(refreshExpenses);
+  const loadingRef = useRef(loading);
+  
+  // Keep refs updated with latest values
+  useEffect(() => {
+    refreshExpensesRef.current = refreshExpenses;
+  }, [refreshExpenses]);
+  
+  useEffect(() => {
+    loadingRef.current = loading;
+  }, [loading]);
+  
   useFocusEffect(
     React.useCallback(() => {
-      // Refresh expenses when returning to this screen
-      refreshExpenses();
-    }, [refreshExpenses])
+      // Skip refresh on initial mount - initial load is handled by autoLoad
+      if (!hasMountedRef.current) {
+        hasMountedRef.current = true;
+        return;
+      }
+      
+      // Only refresh if not currently loading to avoid duplicate calls
+      // Use ref to avoid dependency on loading state which would cause infinite loop
+      if (!loadingRef.current) {
+        refreshExpensesRef.current();
+      }
+    }, []) // Empty dependency array - only run on focus, not on state changes
   );
 
   const resetFilters = () => {

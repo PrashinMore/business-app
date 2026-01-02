@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import {
   Expense,
   ExpenseFilters,
@@ -64,7 +64,34 @@ export function useExpenses(options: UseExpensesOptions = {}): UseExpensesReturn
   const [reportError, setReportError] = useState<string | null>(null);
 
   // Filters state
-  const [filters, setFilters] = useState<ExpenseFilters | undefined>(initialFilters);
+  const [filters, setFiltersState] = useState<ExpenseFilters | undefined>(initialFilters);
+  
+  // Wrapper for setFilters that only updates if values actually changed
+  const setFilters = (newFilters: ExpenseFilters) => {
+    setFiltersState(prev => {
+      // Compare filter values to prevent unnecessary updates
+      const prevKey = JSON.stringify({
+        from: prev?.from || '',
+        to: prev?.to || '',
+        category: prev?.category || '',
+        page: prev?.page || 1,
+        size: prev?.size || 20,
+      });
+      const newKey = JSON.stringify({
+        from: newFilters?.from || '',
+        to: newFilters?.to || '',
+        category: newFilters?.category || '',
+        page: newFilters?.page || 1,
+        size: newFilters?.size || 20,
+      });
+      
+      // Only update if values actually changed
+      if (prevKey !== newKey) {
+        return newFilters;
+      }
+      return prev; // Return previous to prevent re-render
+    });
+  };
 
   // Load expenses
   const loadExpenses = async (expenseFilters?: ExpenseFilters) => {
@@ -175,8 +202,24 @@ export function useExpenses(options: UseExpensesOptions = {}): UseExpensesReturn
   };
 
   // Effect to load expenses when filters change or on mount
+  // Use a ref to track previous filter values to prevent unnecessary API calls
+  const prevFiltersKeyRef = useRef<string | null>(null);
+  
   useEffect(() => {
-    if (autoLoad) {
+    if (!autoLoad) return;
+    
+    // Create a stable string representation of filters to compare
+    const filtersKey = JSON.stringify({
+      from: filters?.from || '',
+      to: filters?.to || '',
+      category: filters?.category || '',
+      page: filters?.page || 1,
+      size: filters?.size || 20,
+    });
+    
+    // Only load if filters have actually changed (or on first load when prevFiltersKeyRef is null)
+    if (prevFiltersKeyRef.current !== filtersKey) {
+      prevFiltersKeyRef.current = filtersKey;
       loadExpenses(filters);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
