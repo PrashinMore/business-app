@@ -69,6 +69,18 @@ const ExpenseFormScreen: React.FC = () => {
       Alert.alert('Validation Error', 'Please enter a date');
       return false;
     }
+    // Validate date format (YYYY-MM-DD)
+    const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
+    if (!dateRegex.test(formData.date)) {
+      Alert.alert('Validation Error', 'Please enter a valid date in YYYY-MM-DD format');
+      return false;
+    }
+    // Check if date is valid
+    const testDate = new Date(formData.date + 'T00:00:00.000Z');
+    if (isNaN(testDate.getTime())) {
+      Alert.alert('Validation Error', 'Please enter a valid date');
+      return false;
+    }
     return true;
   };
 
@@ -78,11 +90,15 @@ const ExpenseFormScreen: React.FC = () => {
     try {
       setLoading(true);
 
+      // Convert date from YYYY-MM-DD to ISO 8601 format
+      // Create a date object and convert to ISO string (sets time to midnight UTC)
+      const dateISO = new Date(formData.date + 'T00:00:00.000Z').toISOString();
+
       const expenseData = {
         category: formData.category.trim(),
         amount: parseFloat(formData.amount),
         note: formData.note.trim() || undefined,
-        date: formData.date,
+        date: dateISO,
         addedBy: user.id,
       };
 
@@ -92,7 +108,7 @@ const ExpenseFormScreen: React.FC = () => {
           category: expenseData.category,
           amount: expenseData.amount,
           note: expenseData.note,
-          date: expenseData.date,
+          date: dateISO,
         });
         // Trigger data refresh across the app
         onExpenseUpdated();
@@ -157,7 +173,11 @@ const ExpenseFormScreen: React.FC = () => {
         </TouchableOpacity>
 
         {showCategoryPicker && (
-          <View style={styles.categoryList}>
+          <ScrollView 
+            style={styles.categoryList}
+            nestedScrollEnabled={true}
+            keyboardShouldPersistTaps="handled"
+          >
             {EXPENSE_CATEGORIES.map((category) => (
               <TouchableOpacity
                 key={category}
@@ -177,7 +197,7 @@ const ExpenseFormScreen: React.FC = () => {
                 </Text>
               </TouchableOpacity>
             ))}
-          </View>
+          </ScrollView>
         )}
 
         {/* Amount */}

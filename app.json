@@ -2,7 +2,7 @@
   "expo": {
     "name": "biznes",
     "slug": "biznes",
-    "version": "1.0.2",
+    "version": "1.0.6",
     "orientation": "portrait",
     "icon": "./assets/yuki_logo.png",
     "userInterfaceStyle": "light",
@@ -16,6 +16,7 @@
       "supportsTablet": true
     },
     "android": {
+      "versionCode": 6,
       "adaptiveIcon": {
         "foregroundImage": "./assets/yuki_logo.png",
         "backgroundColor": "#ffffff"

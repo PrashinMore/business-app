@@ -12,7 +12,7 @@ import {
   ScrollView,
   Platform,
 } from 'react-native';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import DateTimePickerModal from 'react-native-modal-datetime-picker';
 import { useExpenses } from '../hooks/useExpenses';
 import { Expense, ExpenseFilters, EXPENSE_CATEGORIES } from '../types/expenses';
@@ -107,6 +107,14 @@ const ExpensesListScreen: React.FC = () => {
     await refreshExpenses();
     setRefreshing(false);
   };
+
+  // Refresh expenses when screen comes into focus (e.g., when returning from ExpenseForm)
+  useFocusEffect(
+    React.useCallback(() => {
+      // Refresh expenses when returning to this screen
+      refreshExpenses();
+    }, [refreshExpenses])
+  );
 
   const resetFilters = () => {
     setFromDate('');

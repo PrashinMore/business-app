@@ -92,11 +92,11 @@ export async function createExpense(expenseData: CreateExpenseData): Promise<Exp
       throw new Error(error.message || 'Failed to create expense');
     }
 
-    const expenseData: any = await response.json();
+    const responseData: any = await response.json();
     // Convert amount string to number
     const expense: Expense = {
-      ...expenseData,
-      amount: parseFloat(expenseData.amount.toString()) || 0,
+      ...responseData,
+      amount: parseFloat(responseData.amount.toString()) || 0,
     };
     return expense;
   } catch (error) {
@@ -123,11 +123,11 @@ export async function updateExpense(
       throw new Error(error.message || 'Failed to update expense');
     }
 
-    const expenseData: any = await response.json();
+    const responseData: any = await response.json();
     // Convert amount string to number
     const expense: Expense = {
-      ...expenseData,
-      amount: parseFloat(expenseData.amount.toString()) || 0,
+      ...responseData,
+      amount: parseFloat(responseData.amount.toString()) || 0,
     };
     return expense;
   } catch (error) {
