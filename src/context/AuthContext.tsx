@@ -129,14 +129,53 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
   const logout = async () => {
     try {
+      // Clear all storage data
       await authLogout();
+      
+      // Clear user state immediately to trigger navigation
       setUser(null);
       setPendingInvitesCount(0);
+      
+      // Force clear any remaining AsyncStorage items
+      const AsyncStorage = (await import('@react-native-async-storage/async-storage')).default;
+      
+      // Get all keys and remove them (comprehensive cleanup)
+      try {
+        const allKeys = await AsyncStorage.getAllKeys();
+        const keysToRemove = allKeys.filter(key => 
+          key === 'accessToken' || 
+          key === 'refreshToken' || 
+          key === 'user' || 
+          key === 'selectedOutletId' ||
+          key.startsWith('cache_') || // Clear any cached data
+          key.startsWith('offline_') // Clear offline queue if needed
+        );
+        if (keysToRemove.length > 0) {
+          await AsyncStorage.multiRemove(keysToRemove);
+        }
+      } catch (clearError) {
+        console.error('Error clearing all storage keys:', clearError);
+        // Fallback: try individual removals
+        await Promise.all([
+          AsyncStorage.removeItem('accessToken').catch(() => {}),
+          AsyncStorage.removeItem('refreshToken').catch(() => {}),
+          AsyncStorage.removeItem('user').catch(() => {}),
+          AsyncStorage.removeItem('selectedOutletId').catch(() => {}),
+        ]);
+      }
     } catch (error) {
       console.error('Logout error:', error);
-      // Still clear user even if logout fails
+      // Always clear user state even if storage clear fails
+      // This ensures navigation happens
       setUser(null);
       setPendingInvitesCount(0);
+      
+      // Try one more time to clear storage
+      try {
+        await authLogout();
+      } catch (finalError) {
+        console.error('Final storage clear attempt failed:', finalError);
+      }
     }
   };
 

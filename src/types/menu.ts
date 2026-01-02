@@ -57,5 +57,9 @@ export interface CreateSaleRequest {
   paymentType?: 'cash' | 'UPI';
   isPaid?: boolean;
   tableId?: string; // Optional table ID to assign table during sale creation
+  // CRM fields
+  customerId?: string; // Existing customer UUID
+  customerPhone?: string; // Phone number (will create/find customer automatically)
+  visitType?: 'DINE_IN' | 'TAKEAWAY' | 'DELIVERY'; // Default: DINE_IN
 }
 

@@ -37,6 +37,7 @@ const SalesListScreen: React.FC = () => {
   const [productId, setProductId] = useState('');
   const [staff, setStaff] = useState('');
   const [paymentType, setPaymentType] = useState<'' | 'cash' | 'UPI'>('');
+  const [allOutlets, setAllOutlets] = useState(false);
 
   // Date picker states
   const [isFromDatePickerVisible, setFromDatePickerVisible] = useState(false);
@@ -50,6 +51,7 @@ const SalesListScreen: React.FC = () => {
     if (productId) filters.productId = productId;
     if (staff) filters.staff = staff;
     if (paymentType) filters.paymentType = paymentType;
+    if (allOutlets) filters.allOutlets = true;
     // Add pagination
     filters.page = page !== undefined ? page : currentPage;
     filters.size = pageSize;
@@ -78,7 +80,7 @@ const SalesListScreen: React.FC = () => {
       if (salesData.sales.length > 0 || salesData.paymentTotals) {
         loadSales(buildFilters(currentPage));
       }
-    }, [fromDate, toDate, productId, staff, paymentType, currentPage])
+    }, [fromDate, toDate, productId, staff, paymentType, currentPage, allOutlets])
   );
 
   const handleLoadSales = async (page: number = 1) => {
@@ -121,6 +123,7 @@ const SalesListScreen: React.FC = () => {
     setProductId('');
     setStaff('');
     setPaymentType('');
+    setAllOutlets(false);
     setFromDatePickerVisible(false);
     setToDatePickerVisible(false);
     setCurrentPage(1);
@@ -234,6 +237,27 @@ const SalesListScreen: React.FC = () => {
 
   return (
     <View style={styles.container}>
+      {/* Outlet Filter Toggle */}
+      <View style={styles.outletFilterContainer}>
+        <TouchableOpacity
+          style={[styles.outletFilterButton, allOutlets && styles.outletFilterButtonActive]}
+          onPress={() => {
+            setAllOutlets(!allOutlets);
+            setCurrentPage(1);
+            setTimeout(() => loadSales(buildFilters(1)), 100);
+          }}
+        >
+          <Ionicons 
+            name={allOutlets ? "globe" : "storefront"} 
+            size={18} 
+            color={allOutlets ? "#fff" : "#007AFF"} 
+          />
+          <Text style={[styles.outletFilterText, allOutlets && styles.outletFilterTextActive]}>
+            {allOutlets ? 'All Outlets' : 'Current Outlet'}
+          </Text>
+        </TouchableOpacity>
+      </View>
+
       {/* Filters Toggle */}
       <TouchableOpacity
         style={styles.filterToggle}
@@ -462,6 +486,36 @@ const styles = StyleSheet.create({
     marginTop: 12,
     fontSize: 16,
     color: '#666',
+  },
+  outletFilterContainer: {
+    backgroundColor: '#fff',
+    padding: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#e0e0e0',
+  },
+  outletFilterButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    borderRadius: 8,
+    backgroundColor: '#fff',
+    borderWidth: 1,
+    borderColor: '#007AFF',
+    gap: 8,
+  },
+  outletFilterButtonActive: {
+    backgroundColor: '#007AFF',
+    borderColor: '#007AFF',
+  },
+  outletFilterText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#007AFF',
+  },
+  outletFilterTextActive: {
+    color: '#fff',
   },
   filterToggle: {
     backgroundColor: '#007AFF',

@@ -10,6 +10,7 @@ import {
   ScrollView,
   Image,
   Modal,
+  TextInput,
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -25,6 +26,9 @@ import { RootStackParamList } from '../navigation/AppNavigator';
 import { BillData, BillItem } from './PrintBillScreen';
 import { getTables } from '../services/tables';
 import { DiningTable } from '../types/tables';
+import { Customer } from '../types/crm';
+import { CustomerSearchModal } from '../components/CustomerSearchModal';
+import { getEligibleRewards, redeemReward } from '../services/crm';
 
 type CartScreenNavigationProp = NativeStackNavigationProp<RootStackParamList>;
 
@@ -41,6 +45,27 @@ const CartScreen: React.FC = () => {
   const [tables, setTables] = useState<DiningTable[]>([]);
   const [showTablePicker, setShowTablePicker] = useState(false);
   const [loadingTables, setLoadingTables] = useState(false);
+  const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
+  const [customerPhone, setCustomerPhone] = useState<string>('');
+  const [customerName, setCustomerName] = useState<string>('');
+  const [showCustomerModal, setShowCustomerModal] = useState(false);
+  const [visitType, setVisitType] = useState<'DINE_IN' | 'TAKEAWAY' | 'DELIVERY'>('DINE_IN');
+  const [selectedRewardId, setSelectedRewardId] = useState<string | null>(null);
+  const [eligibleRewards, setEligibleRewards] = useState<Array<{
+    id: string;
+    name: string;
+    description?: string;
+    type: 'DISCOUNT_PERCENTAGE' | 'DISCOUNT_FIXED' | 'FREE_ITEM' | 'CASHBACK';
+    pointsRequired: number;
+    discountPercentage?: number;
+    discountAmount?: number;
+    freeItemName?: string;
+    cashbackAmount?: number;
+    minOrderValue?: number;
+    maxDiscountAmount?: number;
+  }>>([]);
+  const [redemptionDiscount, setRedemptionDiscount] = useState<number>(0);
+  const [loadingEligibleRewards, setLoadingEligibleRewards] = useState(false);
   
   // Ref to track if we should print after checkout
   const printAfterCheckoutRef = useRef(false);
@@ -53,6 +78,72 @@ const CartScreen: React.FC = () => {
   useEffect(() => {
     loadTables();
   }, []);
+
+  // Load eligible rewards when customer and cart change
+  useEffect(() => {
+    async function loadEligibleRewards() {
+      if (
+        !selectedCustomer?.loyaltyAccount ||
+        getTotalAmount() <= 0
+      ) {
+        setEligibleRewards([]);
+        setSelectedRewardId(null);
+        setRedemptionDiscount(0);
+        return;
+      }
+
+      setLoadingEligibleRewards(true);
+      try {
+        const rewards = await getEligibleRewards(
+          selectedCustomer.id,
+          getTotalAmount(),
+        );
+        setEligibleRewards(rewards);
+        // Reset selection if current reward is no longer eligible
+        if (selectedRewardId && !rewards.find(r => r.id === selectedRewardId)) {
+          setSelectedRewardId(null);
+          setRedemptionDiscount(0);
+        }
+      } catch (err) {
+        console.error('Failed to load eligible rewards:', err);
+        setEligibleRewards([]);
+      } finally {
+        setLoadingEligibleRewards(false);
+      }
+    }
+
+    loadEligibleRewards();
+  }, [selectedCustomer?.id, cart.length, selectedRewardId]);
+
+  // Calculate discount when selected reward changes
+  useEffect(() => {
+    if (!selectedRewardId || eligibleRewards.length === 0) {
+      setRedemptionDiscount(0);
+      return;
+    }
+
+    const selectedReward = eligibleRewards.find(r => r.id === selectedRewardId);
+    if (!selectedReward) {
+      setRedemptionDiscount(0);
+      return;
+    }
+
+    let discount = 0;
+    if (selectedReward.type === 'DISCOUNT_PERCENTAGE' && selectedReward.discountPercentage) {
+      discount = (getTotalAmount() * selectedReward.discountPercentage) / 100;
+    } else if (selectedReward.type === 'DISCOUNT_FIXED' && selectedReward.discountAmount) {
+      discount = selectedReward.discountAmount;
+    }
+
+    // Apply maximum discount limit
+    if (selectedReward.maxDiscountAmount && discount > selectedReward.maxDiscountAmount) {
+      discount = selectedReward.maxDiscountAmount;
+    }
+
+    // Don't exceed bill amount
+    discount = Math.min(discount, getTotalAmount());
+    setRedemptionDiscount(discount);
+  }, [selectedRewardId, eligibleRewards, cart.length]);
 
   const loadTables = async () => {
     try {
@@ -116,7 +207,37 @@ const CartScreen: React.FC = () => {
     try {
       setCheckingOut(true);
 
-      const totalAmount = getTotalAmount();
+      const subtotalAmount = getTotalAmount();
+      let finalTotalAmount = subtotalAmount;
+      let loyaltyPointsRedeemed = 0;
+      let loyaltyDiscountAmount = 0;
+
+      // Handle reward redemption if applicable
+      if (
+        selectedCustomer?.loyaltyAccount &&
+        selectedRewardId &&
+        redemptionDiscount > 0
+      ) {
+        try {
+          const redemption = await redeemReward(
+            selectedCustomer.id,
+            selectedRewardId,
+            subtotalAmount,
+          );
+          loyaltyPointsRedeemed = redemption.pointsUsed;
+          loyaltyDiscountAmount = redemption.discountAmount;
+          finalTotalAmount = Number((subtotalAmount - redemption.discountAmount).toFixed(2));
+          // Update selected customer with new points
+          if (selectedCustomer.loyaltyAccount) {
+            selectedCustomer.loyaltyAccount.points = redemption.pointsAfter;
+          }
+        } catch (err) {
+          console.error('Reward redemption failed:', err);
+          Alert.alert('Redemption Error', err instanceof Error ? err.message : 'Failed to redeem reward. Please try again.');
+          setCheckingOut(false);
+          return;
+        }
+      }
 
       const items = cart.map(item => ({
         productId: item.productId,
@@ -130,11 +251,22 @@ const CartScreen: React.FC = () => {
       const saleData = {
         date: new Date().toISOString(),
         items,
-        totalAmount: Number(totalAmount.toFixed(2)),
+        totalAmount: Number(finalTotalAmount.toFixed(2)),
         soldBy: user.id,
         paymentType: validPaymentType,
         isPaid,
         ...(selectedTableId && { tableId: selectedTableId }),
+        // CRM fields
+        ...(selectedCustomer && { customerId: selectedCustomer.id }),
+        ...(customerPhone && !selectedCustomer && { 
+          customerPhone,
+          ...(customerName && { customerName }),
+        }),
+        visitType,
+        ...(loyaltyPointsRedeemed > 0 && {
+          loyaltyPointsRedeemed,
+          loyaltyDiscountAmount,
+        }),
       };
 
       const sale = await checkout(saleData);
@@ -153,7 +285,7 @@ const CartScreen: React.FC = () => {
 
         Alert.alert(
           'Order Queued Offline',
-          `Your order has been queued for processing when connection is restored.\n\nLocal ID: ${sale.id}\nTotal: ₹${totalAmount.toFixed(2)}\nPayment: ${validPaymentType.toUpperCase()}\nStatus: ${isPaid ? 'Paid' : 'Pending'}\n\n${queuedSalesCount + 1} order(s) pending sync.`,
+          `Your order has been queued for processing when connection is restored.\n\nLocal ID: ${sale.id}\nTotal: ₹${finalTotalAmount.toFixed(2)}\nPayment: ${validPaymentType.toUpperCase()}\nStatus: ${isPaid ? 'Paid' : 'Pending'}\n\n${queuedSalesCount + 1} order(s) pending sync.`,
           [
             { text: 'OK' },
             ...(isOnline ? [] : [
@@ -183,8 +315,8 @@ const CartScreen: React.FC = () => {
           saleId,
           date: saleDate,
           items: printBillItems,
-          subtotal: totalAmount,
-          totalAmount,
+          subtotal: subtotalAmount,
+          totalAmount: finalTotalAmount,
           paymentType: validPaymentType,
           isPaid,
           cashierName: user?.name,
@@ -192,6 +324,8 @@ const CartScreen: React.FC = () => {
 
         // Clear cart on success (online sale)
         clearCart();
+        setSelectedRewardId(null);
+        setRedemptionDiscount(0);
 
         // Trigger data refresh (dashboard, sales list, menu stock)
         onSaleCreated();
@@ -205,7 +339,7 @@ const CartScreen: React.FC = () => {
           // Show alert with print option
           Alert.alert(
             'Order Placed! 🎉',
-            `Your order has been placed successfully.\n\nSale ID: ${sale.id.substring(0, 8).toUpperCase()}\nTotal: ₹${totalAmount.toFixed(2)}\nPayment: ${validPaymentType.toUpperCase()}\nStatus: ${isPaid ? 'Paid' : 'Pending'}`,
+            `Your order has been placed successfully.\n\nSale ID: ${sale.id.substring(0, 8).toUpperCase()}\nTotal: ₹${finalTotalAmount.toFixed(2)}\nPayment: ${validPaymentType.toUpperCase()}\nStatus: ${isPaid ? 'Paid' : 'Pending'}`,
             [
               { text: 'Done', style: 'cancel' },
               {
@@ -403,9 +537,191 @@ const CartScreen: React.FC = () => {
               </View>
             </View>
 
+            {/* Customer Selection */}
+            <View style={styles.section}>
+              <Text style={styles.sectionLabel}>Customer (Optional)</Text>
+              <TouchableOpacity
+                style={styles.customerButton}
+                onPress={() => setShowCustomerModal(true)}
+              >
+                {selectedCustomer ? (
+                  <View style={styles.customerInfo}>
+                    <Ionicons name="person" size={20} color="#007AFF" />
+                    <View style={styles.customerDetails}>
+                      <Text style={styles.customerName}>{selectedCustomer.name}</Text>
+                      <Text style={styles.customerPhone}>{selectedCustomer.phone}</Text>
+                      {selectedCustomer.loyaltyAccount && (
+                        <Text style={styles.loyaltyPoints}>
+                          ⭐ {selectedCustomer.loyaltyAccount.points} points ({selectedCustomer.loyaltyAccount.tier})
+                        </Text>
+                      )}
+                      {loadingEligibleRewards ? (
+                        <View style={styles.redemptionContainer}>
+                          <Text style={styles.redemptionLabel}>Loading rewards...</Text>
+                        </View>
+                      ) : eligibleRewards.length === 0 ? (
+                        <View style={styles.redemptionContainer}>
+                          <Text style={styles.redemptionLabel}>No eligible rewards available</Text>
+                        </View>
+                      ) : (
+                        <View style={styles.redemptionContainer}>
+                          <Text style={styles.redemptionLabel}>Available Rewards:</Text>
+                          <ScrollView style={styles.rewardsList}>
+                            {eligibleRewards.map((reward) => {
+                              const getRewardDesc = () => {
+                                if (reward.type === 'DISCOUNT_PERCENTAGE') {
+                                  return `${reward.discountPercentage}% discount${reward.maxDiscountAmount ? ` (max ₹${reward.maxDiscountAmount})` : ''}`;
+                                }
+                                if (reward.type === 'DISCOUNT_FIXED') {
+                                  return `₹${reward.discountAmount} off${reward.maxDiscountAmount ? ` (max ₹${reward.maxDiscountAmount})` : ''}`;
+                                }
+                                if (reward.type === 'FREE_ITEM') {
+                                  return `Free ${reward.freeItemName}`;
+                                }
+                                if (reward.type === 'CASHBACK') {
+                                  return `₹${reward.cashbackAmount} cashback`;
+                                }
+                                return '';
+                              };
+                              const isSelected = selectedRewardId === reward.id;
+                              return (
+                                <TouchableOpacity
+                                  key={reward.id}
+                                  onPress={() => {
+                                    setSelectedRewardId(isSelected ? null : reward.id);
+                                  }}
+                                  style={[
+                                    styles.rewardItem,
+                                    isSelected && styles.rewardItemSelected,
+                                  ]}
+                                >
+                                  <View style={styles.rewardItemContent}>
+                                    <Text style={[styles.rewardName, isSelected && styles.rewardNameSelected]}>
+                                      {reward.name}
+                                    </Text>
+                                    <Text style={[styles.rewardDesc, isSelected && styles.rewardDescSelected]}>
+                                      {getRewardDesc()}
+                                    </Text>
+                                    {reward.minOrderValue && (
+                                      <Text style={styles.rewardMinOrder}>
+                                        Min order: ₹{reward.minOrderValue}
+                                      </Text>
+                                    )}
+                                  </View>
+                                  <Text style={[styles.rewardPoints, isSelected && styles.rewardPointsSelected]}>
+                                    {reward.pointsRequired} pts
+                                  </Text>
+                                </TouchableOpacity>
+                              );
+                            })}
+                          </ScrollView>
+                          {selectedRewardId && redemptionDiscount > 0 && (
+                            <View style={styles.discountContainer}>
+                              <Text style={styles.discountText}>
+                                Discount: -₹{redemptionDiscount.toFixed(2)}
+                              </Text>
+                            </View>
+                          )}
+                        </View>
+                      )}
+                    </View>
+                    <TouchableOpacity
+                      onPress={(e) => {
+                        e.stopPropagation();
+                        setSelectedCustomer(null);
+                        setCustomerPhone('');
+                        setCustomerName('');
+                      }}
+                      style={styles.removeCustomerButton}
+                    >
+                      <Ionicons name="close-circle" size={20} color="#ef4444" />
+                    </TouchableOpacity>
+                  </View>
+                ) : customerPhone ? (
+                  <View style={styles.customerInfo}>
+                    <Ionicons name="phone-portrait" size={20} color="#007AFF" />
+                    <View style={styles.customerDetails}>
+                      <Text style={styles.customerPhone}>{customerPhone}</Text>
+                      <Text style={styles.newCustomerText}>New customer will be created</Text>
+                    </View>
+                    <TouchableOpacity
+                      onPress={(e) => {
+                        e.stopPropagation();
+                        setCustomerPhone('');
+                        setCustomerName('');
+                      }}
+                      style={styles.removeCustomerButton}
+                    >
+                      <Ionicons name="close-circle" size={20} color="#ef4444" />
+                    </TouchableOpacity>
+                  </View>
+                ) : (
+                  <View style={styles.customerInfo}>
+                    <Ionicons name="person-add" size={20} color="#6b7280" />
+                    <Text style={styles.customerButtonText}>Select or Add Customer</Text>
+                    <Ionicons name="chevron-forward" size={20} color="#6b7280" />
+                  </View>
+                )}
+              </TouchableOpacity>
+            </View>
+
+            {/* Customer Name Input (for new customers) */}
+            {customerPhone && !selectedCustomer && (
+              <View style={styles.section}>
+                <Text style={styles.sectionLabel}>Customer Name (Optional)</Text>
+                <TextInput
+                  style={styles.input}
+                  placeholder="Enter customer name"
+                  value={customerName}
+                  onChangeText={setCustomerName}
+                  placeholderTextColor="#9ca3af"
+                />
+              </View>
+            )}
+
+            {/* Visit Type Selection */}
+            {selectedCustomer || customerPhone ? (
+              <View style={styles.section}>
+                <Text style={styles.sectionLabel}>Visit Type</Text>
+                <View style={styles.visitTypeContainer}>
+                  {(['DINE_IN', 'TAKEAWAY', 'DELIVERY'] as const).map((type) => (
+                    <TouchableOpacity
+                      key={type}
+                      style={[
+                        styles.visitTypeButton,
+                        visitType === type && styles.visitTypeButtonActive,
+                      ]}
+                      onPress={() => setVisitType(type)}
+                    >
+                      <Text
+                        style={[
+                          styles.visitTypeButtonText,
+                          visitType === type && styles.visitTypeButtonTextActive,
+                        ]}
+                      >
+                        {type.replace('_', ' ')}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              </View>
+            ) : null}
+
+            {redemptionDiscount > 0 && (
+              <View style={styles.totalSection}>
+                <Text style={styles.totalLabel}>Subtotal:</Text>
+                <Text style={styles.totalAmount}>₹{totalAmount.toFixed(2)}</Text>
+              </View>
+            )}
+            {redemptionDiscount > 0 && (
+              <View style={styles.totalSection}>
+                <Text style={styles.totalLabel}>Loyalty Discount:</Text>
+                <Text style={[styles.totalAmount, styles.discountAmount]}>-₹{redemptionDiscount.toFixed(2)}</Text>
+              </View>
+            )}
             <View style={styles.totalSection}>
               <Text style={styles.totalLabel}>Total Amount:</Text>
-              <Text style={styles.totalAmount}>₹{totalAmount.toFixed(2)}</Text>
+              <Text style={styles.totalAmount}>₹{(totalAmount - redemptionDiscount).toFixed(2)}</Text>
             </View>
 
             {!isOnline && (
@@ -479,6 +795,28 @@ const CartScreen: React.FC = () => {
             )}
           </View>
         }
+      />
+
+      {/* Customer Search Modal */}
+      <CustomerSearchModal
+        visible={showCustomerModal}
+        onClose={() => setShowCustomerModal(false)}
+        onSelect={(customer, phone) => {
+          if (customer) {
+            setSelectedCustomer(customer);
+            setCustomerPhone('');
+            setCustomerName(''); // Clear name when existing customer is selected
+          } else if (phone) {
+            setCustomerPhone(phone);
+            setSelectedCustomer(null);
+            // Keep customerName if user already entered it
+          } else {
+            setSelectedCustomer(null);
+            setCustomerPhone('');
+            setCustomerName('');
+          }
+        }}
+        initialPhone={customerPhone}
       />
 
       {/* Table Picker Modal */}
@@ -689,6 +1027,191 @@ const styles = StyleSheet.create({
   },
   paymentStatusSection: {
     marginBottom: 16,
+  },
+  section: {
+    marginBottom: 16,
+  },
+  sectionLabel: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#333',
+    marginBottom: 12,
+  },
+  customerButton: {
+    backgroundColor: '#f9fafb',
+    borderRadius: 8,
+    padding: 12,
+    borderWidth: 1,
+    borderColor: '#e5e7eb',
+  },
+  customerInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  customerDetails: {
+    flex: 1,
+    marginLeft: 12,
+  },
+  customerName: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#111827',
+    marginBottom: 2,
+  },
+  customerPhone: {
+    fontSize: 14,
+    color: '#6b7280',
+  },
+  loyaltyPoints: {
+    fontSize: 12,
+    color: '#f59e0b',
+    fontWeight: '600',
+    marginTop: 4,
+  },
+  redemptionContainer: {
+    marginTop: 8,
+    paddingTop: 8,
+    borderTopWidth: 1,
+    borderTopColor: '#e5e7eb',
+  },
+  redemptionLabel: {
+    fontSize: 12,
+    color: '#6b7280',
+    marginBottom: 8,
+  },
+  redemptionInputContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  redemptionInput: {
+    flex: 1,
+    backgroundColor: '#fff',
+    borderWidth: 1,
+    borderColor: '#d1d5db',
+    borderRadius: 6,
+    padding: 8,
+    fontSize: 14,
+    color: '#111827',
+  },
+  discountText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#10b981',
+  },
+  discountAmount: {
+    color: '#10b981',
+  },
+  rewardsList: {
+    maxHeight: 200,
+  },
+  rewardItem: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 12,
+    marginBottom: 8,
+    backgroundColor: '#f9fafb',
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#e5e7eb',
+  },
+  rewardItemSelected: {
+    backgroundColor: '#e3f2fd',
+    borderColor: '#007AFF',
+    borderWidth: 2,
+  },
+  rewardItemContent: {
+    flex: 1,
+  },
+  rewardName: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#111827',
+    marginBottom: 4,
+  },
+  rewardNameSelected: {
+    color: '#007AFF',
+  },
+  rewardDesc: {
+    fontSize: 12,
+    color: '#6b7280',
+    marginBottom: 4,
+  },
+  rewardDescSelected: {
+    color: '#007AFF',
+  },
+  rewardMinOrder: {
+    fontSize: 11,
+    color: '#9ca3af',
+    marginTop: 2,
+  },
+  rewardPoints: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#f59e0b',
+    marginLeft: 12,
+  },
+  rewardPointsSelected: {
+    color: '#007AFF',
+  },
+  discountContainer: {
+    marginTop: 8,
+    padding: 8,
+    backgroundColor: '#d1fae5',
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: '#10b981',
+  },
+  newCustomerText: {
+    fontSize: 12,
+    color: '#007AFF',
+    fontStyle: 'italic',
+  },
+  input: {
+    backgroundColor: '#fff',
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#e5e7eb',
+    padding: 12,
+    fontSize: 16,
+    color: '#111827',
+  },
+  removeCustomerButton: {
+    padding: 4,
+  },
+  customerButtonText: {
+    flex: 1,
+    fontSize: 16,
+    color: '#6b7280',
+    marginLeft: 12,
+  },
+  visitTypeContainer: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  visitTypeButton: {
+    flex: 1,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderRadius: 8,
+    borderWidth: 2,
+    borderColor: '#ddd',
+    backgroundColor: '#fff',
+    alignItems: 'center',
+  },
+  visitTypeButtonActive: {
+    borderColor: '#007AFF',
+    backgroundColor: '#e3f2fd',
+  },
+  visitTypeButtonText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#666',
+    textTransform: 'capitalize',
+  },
+  visitTypeButtonTextActive: {
+    color: '#007AFF',
   },
   paymentTypeLabel: {
     fontSize: 16,

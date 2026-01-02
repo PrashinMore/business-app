@@ -25,6 +25,7 @@ import InvitesScreen from '../screens/InvitesScreen';
 import PrintBillScreen, { BillData } from '../screens/PrintBillScreen';
 import TablesListScreen from '../screens/TablesListScreen';
 import SupportScreen from '../screens/SupportScreen';
+import CustomerProfileScreen from '../screens/CustomerProfileScreen';
 import MainTabNavigator from './MainTabNavigator';
 
 export type RootStackParamList = {
@@ -53,6 +54,7 @@ export type RootStackParamList = {
   CategoryDetails: { category: any } | undefined;
   Invites: undefined;
   TablesList: undefined;
+  CustomerProfile: { customerId: string };
 };
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
@@ -231,6 +233,11 @@ const AppNavigator: React.FC = () => {
           name="TablesList"
           component={TablesListScreen}
           options={{ headerShown: true, title: 'Tables' }}
+        />
+        <Stack.Screen
+          name="CustomerProfile"
+          component={CustomerProfileScreen}
+          options={{ headerShown: true, title: 'Customer Profile' }}
         />
       </Stack.Navigator>
     </NavigationContainer>

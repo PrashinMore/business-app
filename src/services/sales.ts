@@ -9,7 +9,7 @@ import { Sale, SalesFilters, DailyTotal, PaymentTypeTotals } from '../types/sale
 
 /**
  * List sales with optional filters and pagination
- * @param filters - Optional filters for date range, product, staff, payment type, and pagination
+ * @param filters - Optional filters for date range, product, staff, payment type, pagination, and outlet scope
  * @returns Promise with paginated sales response or array of sales (backward compatibility)
  */
 export async function listSales(filters: SalesFilters = {}): Promise<{ sales: Sale[]; total: number } | Sale[]> {
@@ -26,9 +26,13 @@ export async function listSales(filters: SalesFilters = {}): Promise<{ sales: Sa
     const queryString = params.toString();
     const url = queryString ? `/sales?${queryString}` : '/sales';
 
+    // If allOutlets is true, don't include outlet header (backend will return all sales)
+    // Otherwise, include outlet header to filter by selected outlet
+    const requiresOutlet = !filters.allOutlets;
+
     const response = await apiRequest(url, {
       method: 'GET',
-    }, true); // requiresOutlet: true
+    }, requiresOutlet);
 
     if (!response.ok) {
       const error = await response.json();
@@ -78,9 +82,10 @@ export async function getSaleDetails(saleId: string): Promise<Sale> {
  * Get daily totals
  * @param from - Optional start date (ISO 8601)
  * @param to - Optional end date (ISO 8601)
+ * @param allOutlets - If true, get totals for all outlets (default: false)
  * @returns Promise with array of daily totals
  */
-export async function getDailyTotals(from?: string, to?: string): Promise<DailyTotal[]> {
+export async function getDailyTotals(from?: string, to?: string, allOutlets?: boolean): Promise<DailyTotal[]> {
   try {
     const params = new URLSearchParams();
     if (from) params.set('from', from);
@@ -89,9 +94,12 @@ export async function getDailyTotals(from?: string, to?: string): Promise<DailyT
     const queryString = params.toString();
     const url = queryString ? `/sales/totals/daily?${queryString}` : '/sales/totals/daily';
 
+    // If allOutlets is true, don't include outlet header (backend will return totals for all outlets)
+    const requiresOutlet = !allOutlets;
+
     const response = await apiRequest(url, {
       method: 'GET',
-    }, true); // requiresOutlet: true
+    }, requiresOutlet);
 
     if (!response.ok) {
       const error = await response.json();
@@ -127,9 +135,12 @@ export async function getPaymentTypeTotals(
       ? `/sales/totals/payment-type?${queryString}`
       : '/sales/totals/payment-type';
 
+    // If allOutlets is true, don't include outlet header (backend will return totals for all outlets)
+    const requiresOutlet = !filters.allOutlets;
+
     const response = await apiRequest(url, {
       method: 'GET',
-    }, true); // requiresOutlet: true
+    }, requiresOutlet);
 
     if (!response.ok) {
       const error = await response.json();

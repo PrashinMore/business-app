@@ -1,14 +1,14 @@
 {
   "name": "business-app-MVP",
   "license": "0BSD",
-  "version": "1.0.7",
+  "version": "1.0.8",
   "main": "index.ts",
   "scripts": {
     "start": "expo start",
     "android": "expo run:android",
     "android:release": "npm run clean:all && npx expo prebuild --platform android --no-install && npx expo run:android --variant release",
     "android:release:full": "npm run clean:all && npx expo prebuild --clean && npx expo run:android --variant release",
-    "android:bundle": "npx expo prebuild --platform android --no-install && cd android && gradlew.bat bundleRelease && cd ..",
+    "android:bundle": "npx expo prebuild --platform android --clean && cd android && gradlew.bat bundleRelease && cd ..",
     "ios": "expo run:ios",
     "web": "expo start --web",
     "clean:all": "node scripts/clean-cache.js",

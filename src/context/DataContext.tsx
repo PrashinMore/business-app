@@ -286,6 +286,7 @@ export const DataProvider: React.FC<DataProviderProps> = ({ children }) => {
           to: filters?.to,
           productId: filters?.productId,
           staff: filters?.staff,
+          allOutlets: filters?.allOutlets,
         }),
       ]);
 

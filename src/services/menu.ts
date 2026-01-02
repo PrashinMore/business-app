@@ -6,7 +6,7 @@
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { API_BASE_URL } from '../config/api';
-import { apiRequest } from './auth';
+import { apiRequest, getStoredOutletId } from './auth';
 import { Product, CreateSaleRequest, Sale } from '../types/menu';
 
 const CACHE_KEYS = {
@@ -170,11 +170,50 @@ export async function getMenuItems(filters?: { search?: string; category?: strin
       return !rawMaterialCategoryNames.includes(product.category.toLowerCase());
     });
     
+    // Fetch stock for all menu items if outlet is selected
+    const outletId = await getStoredOutletId();
+    if (outletId && menuItems.length > 0) {
+      try {
+        const productIds = menuItems.map(p => p.id);
+        const response = await apiRequest(`/stock/outlet/${outletId}?productIds=${productIds.join(',')}`, {
+          method: 'GET',
+        });
+        
+        if (response.ok) {
+          const stockData = await response.json();
+          const stockMap = new Map<string, number>();
+          stockData.forEach((stock: any) => {
+            stockMap.set(stock.productId, stock.quantity);
+          });
+          
+          // Attach stock to menu items
+          const menuItemsWithStock = menuItems.map(product => ({
+            ...product,
+            stock: stockMap.get(product.id) ?? 0,
+          }));
+          
+          // Cache menu items separately for faster access (only if no filters applied)
+          if (!filters?.search && !filters?.category) {
+            await cacheMenuItems(menuItemsWithStock);
+          }
+          return menuItemsWithStock;
+        }
+      } catch (stockErr) {
+        console.warn('Failed to load stock, showing products without stock:', stockErr);
+      }
+    }
+    
+    // If no outlet or stock fetch failed, show products with stock = 0
+    const menuItemsWithStock = menuItems.map(product => ({
+      ...product,
+      stock: product.stock ?? 0,
+    }));
+    
     // Cache menu items separately for faster access (only if no filters applied)
     if (!filters?.search && !filters?.category) {
-      await cacheMenuItems(menuItems);
+      await cacheMenuItems(menuItemsWithStock);
     }
-    return menuItems;
+    return menuItemsWithStock;
   } catch (error) {
     // Try to return cached menu items if available (only if no filters)
     if (!filters?.search && !filters?.category) {

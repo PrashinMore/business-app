@@ -33,10 +33,22 @@ const ProfileScreen: React.FC = () => {
         {
           text: 'Logout',
           style: 'destructive',
-          onPress: () => {
-            logout().catch((error: any) => {
-              Alert.alert('Error', error.message || 'Failed to logout');
-            });
+          onPress: async () => {
+            try {
+              // Call logout which will clear all data and set user to null
+              await logout();
+              // Navigation will be handled automatically by AppNavigator
+              // when isAuthenticated changes (user becomes null)
+            } catch (error: any) {
+              console.error('Logout error:', error);
+              // Even if logout fails, ensure user state is cleared
+              // This will trigger navigation
+              try {
+                await logout();
+              } catch (retryError) {
+                console.error('Retry logout error:', retryError);
+              }
+            }
           },
         },
       ]

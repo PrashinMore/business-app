@@ -9,6 +9,7 @@ export interface SalesFilters {
   paymentType?: 'cash' | 'UPI';
   page?: number; // Page number (1-based, minimum 1)
   size?: number; // Page size (minimum 1)
+  allOutlets?: boolean; // If true, view sales from all outlets (default: false)
 }
 
 export interface DailyTotal {

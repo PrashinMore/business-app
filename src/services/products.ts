@@ -102,7 +102,40 @@ export async function getProducts(filters?: ProductFilters): Promise<Product[]> 
     }
 
     const products: Product[] = await response.json();
-    return products;
+    
+    // Fetch stock for all products if outlet is selected
+    const { getStoredOutletId } = await import('./auth');
+    const outletId = await getStoredOutletId();
+    if (outletId && products.length > 0) {
+      try {
+        const productIds = products.map(p => p.id);
+        const stockResponse = await apiRequest(`/stock/outlet/${outletId}?productIds=${productIds.join(',')}`, {
+          method: 'GET',
+        });
+        
+        if (stockResponse.ok) {
+          const stockData = await stockResponse.json();
+          const stockMap = new Map<string, number>();
+          stockData.forEach((stock: any) => {
+            stockMap.set(stock.productId, stock.quantity);
+          });
+          
+          // Attach stock to products
+          return products.map(product => ({
+            ...product,
+            stock: stockMap.get(product.id) ?? 0,
+          }));
+        }
+      } catch (stockErr) {
+        console.warn('Failed to load stock, showing products without stock:', stockErr);
+      }
+    }
+    
+    // If no outlet or stock fetch failed, show products with stock = 0
+    return products.map(product => ({
+      ...product,
+      stock: product.stock ?? 0,
+    }));
   } catch (error) {
     console.error('Get products error:', error);
     throw error;
@@ -274,7 +307,7 @@ export async function deleteProduct(productId: string): Promise<void> {
 }
 
 /**
- * Adjust product stock by a delta value
+ * Adjust product stock by a delta value (outlet-specific)
  * @param productId - Product ID
  * @param delta - Positive to increase, negative to decrease
  */
@@ -283,18 +316,21 @@ export async function adjustStock(
   delta: number
 ): Promise<Product> {
   try {
-    const response = await apiRequest(`/products/${productId}/stock`, {
+    const response = await apiRequest(`/stock/product/${productId}/adjust`, {
       method: 'PATCH',
       body: JSON.stringify({ delta }),
-    });
+    }, true); // requiresOutlet: true
 
     if (!response.ok) {
       const error = await response.json();
       throw new Error(error.message || 'Failed to adjust stock');
     }
 
-    const product: Product = await response.json();
-    return product;
+    const stock = await response.json();
+    // Note: This returns a Stock entity, not a Product
+    // We'll need to fetch the product separately if needed
+    // For now, return the stock data as Product-like structure
+    return stock as any;
   } catch (error) {
     console.error('Adjust stock error:', error);
     throw error;
@@ -302,10 +338,31 @@ export async function adjustStock(
 }
 
 /**
- * Get low stock products
+ * Get low stock products (outlet-specific)
  */
 export async function getLowStockProducts(): Promise<Product[]> {
-  return getProducts({ lowStock: true });
+  try {
+    const response = await apiRequest('/stock/low-stock', {
+      method: 'GET',
+    }, true); // requiresOutlet: true
+
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.message || 'Failed to load low stock products');
+    }
+
+    const stocks = await response.json();
+    // Stock entities have product relation, need to map to Product format
+    // For now, return as-is - the backend should return products with stock info
+    return stocks.map((stock: any) => ({
+      ...stock.product,
+      stock: stock.quantity,
+      isLowStock: true,
+    })) as Product[];
+  } catch (error) {
+    console.error('Get low stock products error:', error);
+    throw error;
+  }
 }
 
 /**

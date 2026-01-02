@@ -8,6 +8,7 @@ import {
   Alert,
   RefreshControl,
   TouchableOpacity,
+  Platform,
 } from 'react-native';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -328,6 +329,27 @@ const SaleDetailsScreen: React.FC = () => {
   );
 };
 
+// Create shadow styles separately to avoid react-native-web warnings
+const cardShadow = Platform.OS === 'web' 
+  ? { boxShadow: '0px 2px 4px rgba(0, 0, 0, 0.1)' }
+  : {
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: 0.1,
+      shadowRadius: 4,
+      elevation: 3,
+    };
+
+const printButtonShadow = Platform.OS === 'web'
+  ? { boxShadow: '0px 2px 4px rgba(0, 0, 0, 0.15)' }
+  : {
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: 0.15,
+      shadowRadius: 4,
+      elevation: 4,
+    };
+
 const styles = StyleSheet.create({
   container: {
     flex: 1,
@@ -361,14 +383,7 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     padding: 20,
     marginBottom: 16,
-    shadowColor: '#000',
-    shadowOffset: {
-      width: 0,
-      height: 2,
-    },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
+    ...cardShadow,
   },
   cardTitle: {
     fontSize: 20,
@@ -546,14 +561,7 @@ const styles = StyleSheet.create({
     marginTop: 8,
     marginBottom: 16,
     gap: 10,
-    shadowColor: '#000',
-    shadowOffset: {
-      width: 0,
-      height: 2,
-    },
-    shadowOpacity: 0.15,
-    shadowRadius: 4,
-    elevation: 4,
+    ...printButtonShadow,
   },
   printButtonText: {
     fontSize: 16,

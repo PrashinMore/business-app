@@ -236,12 +236,69 @@ export async function resetPassword(
 
 /**
  * Logout user
- * Clears stored tokens and user data
+ * Clears all stored tokens, user data, cache, and app state
  */
 export async function logout(): Promise<void> {
-  await AsyncStorage.removeItem('accessToken');
-  await AsyncStorage.removeItem('refreshToken');
-  await AsyncStorage.removeItem('user');
+  try {
+    // Get all keys first
+    const allKeys = await AsyncStorage.getAllKeys();
+    
+    // Keys to remove: auth, outlet, cache, and offline sales
+    const keysToRemove: string[] = [];
+    
+    // Authentication keys
+    keysToRemove.push('accessToken', 'refreshToken', 'user', 'selectedOutletId');
+    
+    // Cache keys (all keys starting with @yuki_cache_)
+    const cacheKeys = allKeys.filter(key => key.startsWith('@yuki_cache_'));
+    keysToRemove.push(...cacheKeys);
+    
+    // Offline sales queue keys
+    const offlineKeys = allKeys.filter(key => 
+      key === 'offline_sales_queue' || 
+      key === 'sync_in_progress' ||
+      key.startsWith('offline_')
+    );
+    keysToRemove.push(...offlineKeys);
+    
+    // Remove all keys at once
+    if (keysToRemove.length > 0) {
+      await AsyncStorage.multiRemove(keysToRemove);
+    }
+  } catch (error) {
+    console.error('Error clearing storage during logout:', error);
+    // Try to clear items individually as fallback
+    try {
+      const keysToRemove = [
+        'accessToken',
+        'refreshToken',
+        'user',
+        'selectedOutletId',
+        'offline_sales_queue',
+        'sync_in_progress',
+      ];
+      
+      // Remove individual keys
+      await Promise.all(
+        keysToRemove.map(key => 
+          AsyncStorage.removeItem(key).catch(() => {
+            // Ignore individual errors
+          })
+        )
+      );
+      
+      // Try to remove cache keys
+      const allKeys = await AsyncStorage.getAllKeys();
+      const cacheKeys = allKeys.filter(key => key.startsWith('@yuki_cache_'));
+      if (cacheKeys.length > 0) {
+        await AsyncStorage.multiRemove(cacheKeys).catch(() => {
+          // Ignore cache clear errors
+        });
+      }
+    } catch (fallbackError) {
+      console.error('Error in fallback storage clear:', fallbackError);
+    }
+  }
 }
 
 /**

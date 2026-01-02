@@ -1,5 +1,6 @@
-import React, { createContext, useState, ReactNode } from 'react';
+import React, { createContext, useState, useEffect, ReactNode } from 'react';
 import { CartItem, Product } from '../types/menu';
+import { useAuth } from './AuthContext';
 
 interface CartContextType {
   cart: CartItem[];
@@ -18,7 +19,15 @@ interface CartProviderProps {
 }
 
 export const CartProvider: React.FC<CartProviderProps> = ({ children }) => {
+  const { isAuthenticated } = useAuth();
   const [cart, setCart] = useState<CartItem[]>([]);
+
+  // Clear cart when user logs out
+  useEffect(() => {
+    if (!isAuthenticated) {
+      setCart([]);
+    }
+  }, [isAuthenticated]);
 
   const addToCart = (product: Product) => {
     if (product.stock <= 0) {
