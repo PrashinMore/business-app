@@ -11,6 +11,7 @@ import {
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import { Ionicons } from '@expo/vector-icons';
 import { getMyInvites, respondToInviteById } from '../services/invites';
 import { OrganizationInvite } from '../types/invites';
 import { RootStackParamList } from '../navigation/AppNavigator';
@@ -166,7 +167,7 @@ const InvitesScreen: React.FC = () => {
 
       {invites.length === 0 ? (
         <View style={styles.emptyContainer}>
-          <Text style={styles.emptyIcon}>📬</Text>
+          <Ionicons name="mail-outline" size={64} color="#999" style={styles.emptyIcon} />
           <Text style={styles.emptyText}>No pending invites</Text>
           <Text style={styles.emptySubtext}>
             You'll see organization invitations here when admins invite you
@@ -296,7 +297,6 @@ const styles = StyleSheet.create({
     padding: 40,
   },
   emptyIcon: {
-    fontSize: 64,
     marginBottom: 16,
   },
   emptyText: {

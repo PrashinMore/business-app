@@ -11,6 +11,7 @@ import {
 } from 'react-native';
 import * as Print from 'expo-print';
 import * as Sharing from 'expo-sharing';
+import { Ionicons } from '@expo/vector-icons';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation/AppNavigator';
@@ -430,7 +431,7 @@ const PrintBillScreen: React.FC = () => {
             <ActivityIndicator color="#1a1a2e" />
           ) : (
             <>
-              <Text style={styles.shareButtonIcon}>📤</Text>
+              <Ionicons name="share" size={18} color="#1a1a2e" style={{ marginRight: 8 }} />
               <Text style={styles.shareButtonText}>Share PDF</Text>
             </>
           )}
@@ -445,7 +446,7 @@ const PrintBillScreen: React.FC = () => {
             <ActivityIndicator color="#fff" />
           ) : (
             <>
-              <Text style={styles.printButtonIcon}>🖨️</Text>
+              <Ionicons name="print" size={18} color="#fff" style={{ marginRight: 8 }} />
               <Text style={styles.printButtonText}>Print Receipt</Text>
             </>
           )}
@@ -669,12 +670,6 @@ const styles = StyleSheet.create({
   },
   printButton: {
     backgroundColor: '#1a1a2e',
-  },
-  shareButtonIcon: {
-    fontSize: 18,
-  },
-  printButtonIcon: {
-    fontSize: 18,
   },
   shareButtonText: {
     fontSize: 15,

@@ -13,6 +13,7 @@ import {
   Platform,
 } from 'react-native';
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
+import { Ionicons } from '@expo/vector-icons';
 import DateTimePickerModal from 'react-native-modal-datetime-picker';
 import { useData } from '../context/DataContext';
 import { Sale, SalesFilters, PaymentTypeTotals } from '../types/sales';
@@ -252,14 +253,14 @@ const SalesListScreen: React.FC = () => {
             <Text style={fromDate ? styles.datePickerText : styles.datePickerPlaceholder}>
               {fromDate ? formatDate(fromDate) : 'From Date'}
             </Text>
-            <Text style={styles.datePickerIcon}>📅</Text>
+            <Ionicons name="calendar" size={20} color="#666" />
           </TouchableOpacity>
 
           <TouchableOpacity style={styles.datePickerButton} onPress={showToDatePicker}>
             <Text style={toDate ? styles.datePickerText : styles.datePickerPlaceholder}>
               {toDate ? formatDate(toDate) : 'To Date'}
             </Text>
-            <Text style={styles.datePickerIcon}>📅</Text>
+            <Ionicons name="calendar" size={20} color="#666" />
           </TouchableOpacity>
 
           <TextInput
@@ -511,10 +512,6 @@ const styles = StyleSheet.create({
   datePickerPlaceholder: {
     fontSize: 14,
     color: '#999',
-  },
-  datePickerIcon: {
-    fontSize: 16,
-    color: '#666',
   },
   paymentTypeFilter: {
     flexDirection: 'row',

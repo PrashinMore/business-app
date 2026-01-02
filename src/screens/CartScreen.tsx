@@ -13,6 +13,7 @@ import {
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import { Ionicons } from '@expo/vector-icons';
 import { useCart } from '../context/CartContext';
 import { useAuth } from '../context/AuthContext';
 import { useSync } from '../context/SyncContext';
@@ -286,7 +287,7 @@ const CartScreen: React.FC = () => {
   if (cart.length === 0) {
     return (
       <View style={styles.emptyContainer}>
-        <Text style={styles.emptyIcon}>🛒</Text>
+        <Ionicons name="cart-outline" size={64} color="#999" style={styles.emptyIcon} />
         <Text style={styles.emptyText}>Your cart is empty</Text>
         <Text style={styles.emptySubtext}>Add items from the menu to get started</Text>
       </View>
@@ -313,7 +314,7 @@ const CartScreen: React.FC = () => {
                   <Text style={[styles.tablePickerText, !selectedTable && styles.tablePickerPlaceholder]}>
                     {selectedTable ? `${selectedTable.name} (${selectedTable.status})` : 'Select Table'}
                   </Text>
-                  <Text style={styles.tablePickerArrow}>▼</Text>
+                  <Ionicons name="chevron-down" size={16} color="#666" />
                 </TouchableOpacity>
                 {selectedTableId && (
                   <TouchableOpacity
@@ -409,7 +410,8 @@ const CartScreen: React.FC = () => {
 
             {!isOnline && (
               <View style={styles.offlineBanner}>
-                <Text style={styles.offlineText}>⚠️ Offline Mode - Orders will be synced when online</Text>
+                <Ionicons name="warning" size={16} color="#856404" style={{ marginRight: 6 }} />
+                <Text style={styles.offlineText}>Offline Mode - Orders will be synced when online</Text>
               </View>
             )}
             
@@ -454,7 +456,7 @@ const CartScreen: React.FC = () => {
                     <ActivityIndicator color="#fff" />
                   ) : (
                     <>
-                      <Text style={styles.printIcon}>🖨️</Text>
+                      <Ionicons name="print" size={16} color="#fff" style={{ marginRight: 6 }} />
                       <Text style={styles.checkoutButtonText}>Checkout & Print</Text>
                     </>
                   )}
@@ -494,7 +496,7 @@ const CartScreen: React.FC = () => {
                 onPress={() => setShowTablePicker(false)}
                 style={styles.modalCloseButton}
               >
-                <Text style={styles.modalCloseText}>✕</Text>
+                <Ionicons name="close" size={18} color="#666" />
               </TouchableOpacity>
             </View>
             <FlatList
@@ -519,7 +521,7 @@ const CartScreen: React.FC = () => {
                     </Text>
                   </View>
                   {selectedTableId === item.id && (
-                    <Text style={styles.tableOptionCheck}>✓</Text>
+                    <Ionicons name="checkmark" size={18} color="#007AFF" />
                   )}
                 </TouchableOpacity>
               )}
@@ -536,7 +538,7 @@ const CartScreen: React.FC = () => {
                 >
                   <Text style={styles.tableOptionName}>No Table</Text>
                   {!selectedTableId && (
-                    <Text style={styles.tableOptionCheck}>✓</Text>
+                    <Ionicons name="checkmark" size={18} color="#007AFF" />
                   )}
                 </TouchableOpacity>
               }
@@ -561,7 +563,6 @@ const styles = StyleSheet.create({
     padding: 20,
   },
   emptyIcon: {
-    fontSize: 64,
     marginBottom: 16,
   },
   emptyText: {
@@ -777,9 +778,6 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: 'bold',
   },
-  printIcon: {
-    fontSize: 16,
-  },
   offlineBanner: {
     backgroundColor: '#fff3cd',
     padding: 12,
@@ -787,11 +785,13 @@ const styles = StyleSheet.create({
     marginBottom: 12,
     borderLeftWidth: 4,
     borderLeftColor: '#ffc107',
+    flexDirection: 'row',
+    alignItems: 'center',
   },
   offlineText: {
     fontSize: 14,
     color: '#856404',
-    textAlign: 'center',
+    flex: 1,
   },
   queuedBanner: {
     backgroundColor: '#d1ecf1',
@@ -842,11 +842,6 @@ const styles = StyleSheet.create({
   tablePickerPlaceholder: {
     color: '#999',
   },
-  tablePickerArrow: {
-    fontSize: 12,
-    color: '#666',
-    marginLeft: 8,
-  },
   clearTableButton: {
     marginTop: 8,
     alignSelf: 'flex-end',
@@ -891,11 +886,6 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
-  modalCloseText: {
-    fontSize: 18,
-    color: '#666',
-    fontWeight: 'bold',
-  },
   tableOption: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -921,11 +911,6 @@ const styles = StyleSheet.create({
   tableOptionInfo: {
     fontSize: 12,
     color: '#999',
-  },
-  tableOptionCheck: {
-    fontSize: 18,
-    color: '#007AFF',
-    fontWeight: 'bold',
   },
 });
 

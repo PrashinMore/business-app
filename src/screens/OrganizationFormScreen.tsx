@@ -9,7 +9,7 @@ import {
   ActivityIndicator,
   ScrollView,
 } from 'react-native';
-import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
+import { useNavigation, useRoute, RouteProp, CommonActions } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useAuth } from '../context/AuthContext';
 import { useOrganizations } from '../hooks/useOrganizations';
@@ -83,13 +83,37 @@ const OrganizationFormScreen: React.FC = () => {
         // Update existing organization
         await updateOrganization(organization.id, organizationData);
         Alert.alert('Success', 'Organization updated successfully');
+        navigation.goBack();
       } else {
         // Create new organization
         await createOrganization(organizationData);
         Alert.alert('Success', 'Organization created successfully');
+        
+        // If this is a new user flow (root screen with no previous screen), navigate to MainTabs
+        // Otherwise, go back to previous screen
+        try {
+          // Check if we can go back - if not, we're at the root (new user flow)
+          if (navigation.canGoBack()) {
+            navigation.goBack();
+          } else {
+            // Navigate to MainTabs for new users who just created their first organization
+            navigation.dispatch(
+              CommonActions.reset({
+                index: 0,
+                routes: [{ name: 'MainTabs' }],
+              })
+            );
+          }
+        } catch (error) {
+          // If canGoBack() throws or is not available, navigate to MainTabs
+          navigation.dispatch(
+            CommonActions.reset({
+              index: 0,
+              routes: [{ name: 'MainTabs' }],
+            })
+          );
+        }
       }
-
-      navigation.goBack();
     } catch (error: any) {
       Alert.alert('Error', error.message || 'Failed to save organization');
     } finally {

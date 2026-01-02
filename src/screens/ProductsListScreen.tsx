@@ -147,7 +147,7 @@ const ProductsListScreen: React.FC = () => {
           </View>
           <Text style={styles.productCategory}>{item.category}</Text>
           <View style={styles.productDetails}>
-            <Text style={styles.productPrice}>₹{item.sellingPrice.toFixed(2)}</Text>
+            <Text style={styles.productPrice}>₹{Number(item.sellingPrice).toFixed(2)}</Text>
             <Text style={styles.productStock}>
               Stock: {item.stock} {item.unit}
             </Text>

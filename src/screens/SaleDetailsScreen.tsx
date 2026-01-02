@@ -7,15 +7,16 @@ import {
   ActivityIndicator,
   Alert,
   RefreshControl,
+  TouchableOpacity,
 } from 'react-native';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import { Ionicons } from '@expo/vector-icons';
 import { getSaleDetails, updateSalePayment } from '../services/sales';
 import { Sale } from '../types/sales';
 import { RootStackParamList } from '../navigation/AppNavigator';
 import { useProductNames } from '../hooks/useProductNames';
 import { useAuth } from '../context/AuthContext';
-import { TouchableOpacity } from 'react-native';
 import { BillData, BillItem } from './PrintBillScreen';
 
 type SaleDetailsScreenRouteProp = RouteProp<RootStackParamList, 'SaleDetails'>;
@@ -318,7 +319,7 @@ const SaleDetailsScreen: React.FC = () => {
         onPress={handlePrintBill}
         disabled={productNamesLoading}
       >
-        <Text style={styles.printButtonIcon}>🖨️</Text>
+        <Ionicons name="print" size={18} color="#fff" style={{ marginRight: 8 }} />
         <Text style={styles.printButtonText}>
           {productNamesLoading ? 'Loading...' : 'Print Receipt'}
         </Text>
@@ -553,9 +554,6 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.15,
     shadowRadius: 4,
     elevation: 4,
-  },
-  printButtonIcon: {
-    fontSize: 20,
   },
   printButtonText: {
     fontSize: 16,

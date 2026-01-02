@@ -1,7 +1,9 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { NavigationContainer, NavigationContainerRef } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { useAuth } from '../context/AuthContext';
+import { fonts } from '../styles/fonts';
+import { getUserOrganizations } from '../services/organizations';
 import LoginScreen from '../screens/LoginScreen';
 import SignUpScreen from '../screens/SignUpScreen';
 import ResetPasswordScreen from '../screens/ResetPasswordScreen';
@@ -22,6 +24,7 @@ import CategoryDetailsScreen from '../screens/CategoryDetailsScreen';
 import InvitesScreen from '../screens/InvitesScreen';
 import PrintBillScreen, { BillData } from '../screens/PrintBillScreen';
 import TablesListScreen from '../screens/TablesListScreen';
+import SupportScreen from '../screens/SupportScreen';
 import MainTabNavigator from './MainTabNavigator';
 
 export type RootStackParamList = {
@@ -29,6 +32,7 @@ export type RootStackParamList = {
   SignUp: undefined;
   MainTabs: undefined;
   ResetPassword: undefined;
+  Support: undefined;
   SaleDetails: { saleId: string };
   PrintBill: { billData: BillData };
   ProductsList: undefined;
@@ -54,9 +58,10 @@ export type RootStackParamList = {
 const Stack = createNativeStackNavigator<RootStackParamList>();
 
 const AppNavigator: React.FC = () => {
-  const { isAuthenticated, loading } = useAuth();
+  const { isAuthenticated, loading, user } = useAuth();
   const navigationRef = useRef<NavigationContainerRef<RootStackParamList>>(null);
   const prevAuthRef = useRef<boolean | null>(null);
+  const [checkingOrganizations, setCheckingOrganizations] = useState(false);
 
   // Handle navigation when authentication state changes
   useEffect(() => {
@@ -68,12 +73,36 @@ const AppNavigator: React.FC = () => {
 
     // Only navigate if authentication state actually changed and navigation is ready
     if (prevAuthRef.current !== isAuthenticated && !loading && navigationRef.current?.isReady()) {
-      if (isAuthenticated) {
-        // User just logged in - navigate to MainTabs
-        navigationRef.current.reset({
-          index: 0,
-          routes: [{ name: 'MainTabs' }],
-        });
+      if (isAuthenticated && user) {
+        // User just logged in/signed up - check if they have organizations
+        setCheckingOrganizations(true);
+        getUserOrganizations(user.id)
+          .then((organizations) => {
+            if (organizations.length === 0) {
+              // New user with no organizations - redirect to OrganizationForm
+              navigationRef.current?.reset({
+                index: 0,
+                routes: [{ name: 'OrganizationForm' }],
+              });
+            } else {
+              // User has organizations - navigate to MainTabs
+              navigationRef.current?.reset({
+                index: 0,
+                routes: [{ name: 'MainTabs' }],
+              });
+            }
+          })
+          .catch((error) => {
+            console.error('Error checking organizations:', error);
+            // On error, default to MainTabs
+            navigationRef.current?.reset({
+              index: 0,
+              routes: [{ name: 'MainTabs' }],
+            });
+          })
+          .finally(() => {
+            setCheckingOrganizations(false);
+          });
       } else {
         // User just logged out - navigate to Login
         navigationRef.current.reset({
@@ -83,16 +112,21 @@ const AppNavigator: React.FC = () => {
       }
       prevAuthRef.current = isAuthenticated;
     }
-  }, [isAuthenticated, loading]);
+  }, [isAuthenticated, loading, user]);
 
-  if (loading) {
+  if (loading || checkingOrganizations) {
     return <LoadingScreen />;
   }
 
   return (
     <NavigationContainer ref={navigationRef}>
       <Stack.Navigator 
-        screenOptions={{ headerShown: false }}
+        screenOptions={{ 
+          headerShown: false,
+          headerTitleStyle: {
+            fontFamily: fonts.medium,
+          },
+        }}
         initialRouteName={isAuthenticated ? 'MainTabs' : 'Login'}
       >
         <Stack.Screen 
@@ -108,10 +142,15 @@ const AppNavigator: React.FC = () => {
           name="MainTabs" 
           component={MainTabNavigator}
         />
-        <Stack.Screen 
-          name="ResetPassword" 
+        <Stack.Screen
+          name="ResetPassword"
           component={ResetPasswordScreen}
           options={{ headerShown: true, title: 'Reset Password' }}
+        />
+        <Stack.Screen
+          name="Support"
+          component={SupportScreen}
+          options={{ headerShown: true, title: 'Support' }}
         />
         <Stack.Screen 
           name="SaleDetails" 

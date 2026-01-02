@@ -10,6 +10,7 @@ import {
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../context/AuthContext';
 import { RootStackParamList } from '../navigation/AppNavigator';
 
@@ -20,7 +21,7 @@ const ProfileScreen: React.FC = () => {
   const { user, logout, refreshUser, pendingInvitesCount, refreshInvitesCount } = useAuth();
   const [refreshing, setRefreshing] = React.useState(false);
 
-  const handleLogout = async () => {
+  const handleLogout = () => {
     Alert.alert(
       'Logout',
       'Are you sure you want to logout?',
@@ -32,12 +33,10 @@ const ProfileScreen: React.FC = () => {
         {
           text: 'Logout',
           style: 'destructive',
-          onPress: async () => {
-            try {
-              await logout();
-            } catch (error: any) {
+          onPress: () => {
+            logout().catch((error: any) => {
               Alert.alert('Error', error.message || 'Failed to logout');
-            }
+            });
           },
         },
       ]
@@ -120,24 +119,33 @@ const ProfileScreen: React.FC = () => {
           style={styles.menuItem}
           onPress={() => navigation.navigate('ProductsList')}
         >
-          <Text style={styles.menuItemText}>📦 Products</Text>
-          <Text style={styles.menuItemArrow}>›</Text>
+          <View style={styles.menuItemContent}>
+            <Ionicons name="cube" size={20} color="#333" style={styles.menuItemIcon} />
+            <Text style={styles.menuItemText}>Products</Text>
+          </View>
+          <Ionicons name="chevron-forward" size={20} color="#999" />
         </TouchableOpacity>
 
         <TouchableOpacity
           style={styles.menuItem}
           onPress={() => navigation.navigate('Inventory')}
         >
-          <Text style={styles.menuItemText}>📊 Inventory</Text>
-          <Text style={styles.menuItemArrow}>›</Text>
+          <View style={styles.menuItemContent}>
+            <Ionicons name="stats-chart" size={20} color="#333" style={styles.menuItemIcon} />
+            <Text style={styles.menuItemText}>Inventory</Text>
+          </View>
+          <Ionicons name="chevron-forward" size={20} color="#999" />
         </TouchableOpacity>
 
         <TouchableOpacity
           style={styles.menuItem}
           onPress={() => navigation.navigate('TablesList')}
         >
-          <Text style={styles.menuItemText}>🪑 Tables</Text>
-          <Text style={styles.menuItemArrow}>›</Text>
+          <View style={styles.menuItemContent}>
+            <Ionicons name="grid" size={20} color="#333" style={styles.menuItemIcon} />
+            <Text style={styles.menuItemText}>Tables</Text>
+          </View>
+          <Ionicons name="chevron-forward" size={20} color="#999" />
         </TouchableOpacity>
 
         {user?.role === 'admin' && (
@@ -145,8 +153,11 @@ const ProfileScreen: React.FC = () => {
             style={styles.menuItem}
             onPress={() => navigation.navigate('OrganizationsList')}
           >
-            <Text style={styles.menuItemText}>🏢 Organizations</Text>
-            <Text style={styles.menuItemArrow}>›</Text>
+            <View style={styles.menuItemContent}>
+              <Ionicons name="business" size={20} color="#333" style={styles.menuItemIcon} />
+              <Text style={styles.menuItemText}>Organizations</Text>
+            </View>
+            <Ionicons name="chevron-forward" size={20} color="#999" />
           </TouchableOpacity>
         )}
 
@@ -156,17 +167,30 @@ const ProfileScreen: React.FC = () => {
             navigation.getParent()?.navigate('Invites');
           }}
         >
-          <View style={styles.menuItemWithBadge}>
-            <Text style={styles.menuItemText}>📬 Invites</Text>
-            {pendingInvitesCount > 0 && (
-              <View style={styles.badge}>
-                <Text style={styles.badgeText}>{pendingInvitesCount}</Text>
-              </View>
-            )}
+          <View style={styles.menuItemContent}>
+            <Ionicons name="mail" size={20} color="#333" style={styles.menuItemIcon} />
+            <View style={styles.menuItemWithBadge}>
+              <Text style={styles.menuItemText}>Invites</Text>
+              {pendingInvitesCount > 0 && (
+                <View style={styles.badge}>
+                  <Text style={styles.badgeText}>{pendingInvitesCount}</Text>
+                </View>
+              )}
+            </View>
           </View>
-          <Text style={styles.menuItemArrow}>›</Text>
+          <Ionicons name="chevron-forward" size={20} color="#999" />
         </TouchableOpacity>
       </View>
+
+      <TouchableOpacity
+        style={styles.supportButton}
+        onPress={() => {
+          navigation.getParent()?.navigate('Support');
+        }}
+      >
+        <Ionicons name="chatbubble" size={18} color="#34C759" style={{ marginRight: 8 }} />
+        <Text style={styles.supportButtonText}>Support</Text>
+      </TouchableOpacity>
 
       <TouchableOpacity
         style={styles.resetPasswordButton}
@@ -299,14 +323,18 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: '#f0f0f0',
   },
+  menuItemContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+  },
+  menuItemIcon: {
+    marginRight: 12,
+  },
   menuItemText: {
     fontSize: 16,
     color: '#333',
     fontWeight: '500',
-  },
-  menuItemArrow: {
-    fontSize: 20,
-    color: '#999',
   },
   menuItemWithBadge: {
     flexDirection: 'row',
@@ -326,6 +354,22 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 12,
     fontWeight: 'bold',
+  },
+  supportButton: {
+    backgroundColor: '#fff',
+    borderRadius: 8,
+    padding: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: '#34C759',
+  },
+  supportButtonText: {
+    color: '#34C759',
+    fontSize: 16,
+    fontWeight: '600',
   },
   resetPasswordButton: {
     backgroundColor: '#fff',

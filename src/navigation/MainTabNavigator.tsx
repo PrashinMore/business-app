@@ -2,6 +2,8 @@ import React from 'react';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { Text } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { Ionicons } from '@expo/vector-icons';
+import { fonts } from '../styles/fonts';
 import HomeScreen from '../screens/HomeScreen';
 import MenuScreen from '../screens/MenuScreen';
 import CartScreen from '../screens/CartScreen';
@@ -32,6 +34,9 @@ const MainTabNavigator: React.FC = () => {
     <Tab.Navigator
       screenOptions={{
         headerShown: true,
+        headerTitleStyle: {
+          fontFamily: fonts.medium,
+        },
         tabBarActiveTintColor: '#007AFF',
         tabBarInactiveTintColor: '#999',
         tabBarStyle: {
@@ -45,6 +50,7 @@ const MainTabNavigator: React.FC = () => {
         tabBarLabelStyle: {
           fontSize: 12,
           fontWeight: '600',
+          fontFamily: fonts.medium,
         },
       }}
     >
@@ -54,7 +60,7 @@ const MainTabNavigator: React.FC = () => {
         options={{
           title: 'Home',
           tabBarIcon: ({ color, size }) => (
-            <Text style={{ fontSize: size, color }}>🏠</Text>
+            <Ionicons name="home" size={size} color={color} />
           ),
         }}
       />
@@ -64,7 +70,7 @@ const MainTabNavigator: React.FC = () => {
         options={{
           title: 'Menu',
           tabBarIcon: ({ color, size }) => (
-            <Text style={{ fontSize: size, color }}>📋</Text>
+            <Ionicons name="menu" size={size} color={color} />
           ),
         }}
       />
@@ -74,7 +80,7 @@ const MainTabNavigator: React.FC = () => {
         options={{
           title: 'Cart',
           tabBarIcon: ({ color, size }) => (
-            <Text style={{ fontSize: size, color }}>🛒</Text>
+            <Ionicons name="cart" size={size} color={color} />
           ),
           tabBarBadge: cartItemCount > 0 ? cartItemCount : undefined,
         }}
@@ -85,7 +91,7 @@ const MainTabNavigator: React.FC = () => {
         options={{
           title: 'Sales',
           tabBarIcon: ({ color, size }) => (
-            <Text style={{ fontSize: size, color }}>📊</Text>
+            <Ionicons name="stats-chart" size={size} color={color} />
           ),
         }}
       />
@@ -95,7 +101,7 @@ const MainTabNavigator: React.FC = () => {
         options={{
           title: 'Inventory',
           tabBarIcon: ({ color, size }) => (
-            <Text style={{ fontSize: size, color }}>📦</Text>
+            <Ionicons name="cube" size={size} color={color} />
           ),
         }}
       />
@@ -105,7 +111,7 @@ const MainTabNavigator: React.FC = () => {
         options={{
           title: 'Expenses',
           tabBarIcon: ({ color, size }) => (
-            <Text style={{ fontSize: size, color }}>💰</Text>
+            <Ionicons name="wallet" size={size} color={color} />
           ),
         }}
       />
@@ -115,7 +121,7 @@ const MainTabNavigator: React.FC = () => {
         options={{
           title: 'Profile',
           tabBarIcon: ({ color, size }) => (
-            <Text style={{ fontSize: size, color }}>👤</Text>
+            <Ionicons name="person" size={size} color={color} />
           ),
         }}
       />

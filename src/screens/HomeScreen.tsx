@@ -12,12 +12,14 @@ import {
 } from 'react-native';
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../context/AuthContext';
 import { useCart } from '../context/CartContext';
 import { useData } from '../context/DataContext';
 import { RootStackParamList } from '../navigation/AppNavigator';
 import { SalesTrendRange } from '../types/dashboard';
 import { API_BASE_URL } from '../config/api';
+import { fonts } from '../styles/fonts';
 
 type HomeScreenNavigationProp = NativeStackNavigationProp<RootStackParamList>;
 
@@ -119,12 +121,12 @@ const HomeScreen: React.FC = () => {
       {/* Quick Stats - Cart */}
       <View style={styles.quickStatsContainer}>
         <View style={styles.quickStatCard}>
-          <Text style={styles.quickStatIcon}>🛒</Text>
+          <Ionicons name="cart" size={28} color="#007AFF" style={styles.quickStatIcon} />
           <Text style={styles.quickStatValue}>{cartItemCount}</Text>
           <Text style={styles.quickStatLabel}>Items in Cart</Text>
         </View>
         <View style={styles.quickStatCard}>
-          <Text style={styles.quickStatIcon}>💰</Text>
+          <Ionicons name="wallet" size={28} color="#007AFF" style={styles.quickStatIcon} />
           <Text style={styles.quickStatValue}>₹{cartTotal.toFixed(0)}</Text>
           <Text style={styles.quickStatLabel}>Cart Total</Text>
         </View>
@@ -138,22 +140,22 @@ const HomeScreen: React.FC = () => {
             <View style={[styles.summaryCard, styles.salesCard]}>
               <Text style={styles.summaryLabel}>Total Sales</Text>
               <Text style={styles.summaryValue}>{formatCurrency(summary.totalSales)}</Text>
-              <Text style={styles.summaryIcon}>💵</Text>
+              <Ionicons name="cash" size={24} color="#4CAF50" style={styles.summaryIcon} />
             </View>
             <View style={[styles.summaryCard, styles.profitCard]}>
               <Text style={styles.summaryLabel}>Net Profit</Text>
               <Text style={styles.summaryValue}>{formatCurrency(summary.netProfit)}</Text>
-              <Text style={styles.summaryIcon}>📈</Text>
+              <Ionicons name="trending-up" size={24} color="#2196F3" style={styles.summaryIcon} />
             </View>
             <View style={[styles.summaryCard, styles.ordersCard]}>
               <Text style={styles.summaryLabel}>Total Orders</Text>
               <Text style={styles.summaryValue}>{summary.totalOrders}</Text>
-              <Text style={styles.summaryIcon}>📦</Text>
+              <Ionicons name="cube" size={24} color="#FF9800" style={styles.summaryIcon} />
             </View>
             <View style={[styles.summaryCard, styles.expensesCard]}>
               <Text style={styles.summaryLabel}>Expenses</Text>
               <Text style={styles.summaryValue}>{formatCurrency(summary.totalExpenses)}</Text>
-              <Text style={styles.summaryIcon}>💸</Text>
+              <Ionicons name="trending-down" size={24} color="#F44336" style={styles.summaryIcon} />
             </View>
           </View>
           
@@ -271,7 +273,10 @@ const HomeScreen: React.FC = () => {
             onPress={() => navigation.navigate('Inventory')}
             style={styles.sectionHeader}
           >
-            <Text style={styles.sectionTitle}>⚠️ Low Stock Alerts</Text>
+            <View style={styles.sectionTitleRow}>
+              <Ionicons name="warning" size={20} color="#FF9800" />
+              <Text style={styles.sectionTitle}> Low Stock Alerts</Text>
+            </View>
             <Text style={styles.viewAllText}>View All ›</Text>
           </TouchableOpacity>
           <TouchableOpacity
@@ -353,6 +358,7 @@ const styles = StyleSheet.create({
     marginTop: 12,
     fontSize: 16,
     color: '#666',
+    fontFamily: fonts.regular,
   },
   content: {
     padding: 16,
@@ -365,11 +371,13 @@ const styles = StyleSheet.create({
     fontSize: 20,
     color: '#666',
     marginBottom: 4,
+    fontFamily: fonts.regular,
   },
   nameText: {
     fontSize: 28,
     fontWeight: 'bold',
     color: '#333',
+    fontFamily: fonts.bold,
   },
   quickStatsContainer: {
     flexDirection: 'row',
@@ -393,7 +401,6 @@ const styles = StyleSheet.create({
     elevation: 3,
   },
   quickStatIcon: {
-    fontSize: 28,
     marginBottom: 8,
   },
   quickStatValue: {
@@ -401,11 +408,13 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     color: '#333',
     marginBottom: 4,
+    fontFamily: fonts.bold,
   },
   quickStatLabel: {
     fontSize: 12,
     color: '#666',
     textAlign: 'center',
+    fontFamily: fonts.regular,
   },
   section: {
     marginBottom: 24,
@@ -426,11 +435,17 @@ const styles = StyleSheet.create({
     fontSize: 20,
     fontWeight: 'bold',
     color: '#333',
+    fontFamily: fonts.bold,
+  },
+  sectionTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
   },
   viewAllText: {
     fontSize: 14,
     color: '#007AFF',
     fontWeight: '600',
+    fontFamily: fonts.medium,
   },
   summaryGrid: {
     flexDirection: 'row',
@@ -472,16 +487,18 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: '#666',
     marginBottom: 4,
+    fontFamily: fonts.regular,
   },
   summaryValue: {
     fontSize: 18,
     fontWeight: 'bold',
     color: '#333',
     marginBottom: 8,
+    fontFamily: fonts.bold,
   },
   summaryIcon: {
-    fontSize: 24,
     alignSelf: 'flex-end',
+    marginTop: 4,
   },
   metricsRow: {
     flexDirection: 'row',

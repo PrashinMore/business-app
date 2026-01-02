@@ -26,7 +26,14 @@
       "package": "com.anonymous.businessapp"
     },
     "web": {
-      "favicon": "./assets/yuki_logo.png"
+      "favicon": "./assets/yuki_logo.png",
+      "build": {
+        "babel": {
+          "include": [
+            "@expo-google-fonts/roboto"
+          ]
+        }
+      }
     }
   }
 }

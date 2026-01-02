@@ -11,6 +11,7 @@ import {
 } from 'react-native';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../context/AuthContext';
 import { useData } from '../context/DataContext';
 import { useExpenses } from '../hooks/useExpenses';
@@ -169,7 +170,11 @@ const ExpenseFormScreen: React.FC = () => {
           <Text style={formData.category ? styles.categoryText : styles.placeholderText}>
             {formData.category || 'Select a category'}
           </Text>
-          <Text style={styles.dropdownIcon}>{showCategoryPicker ? '▲' : '▼'}</Text>
+          <Ionicons 
+            name={showCategoryPicker ? "chevron-up" : "chevron-down"} 
+            size={20} 
+            color="#666" 
+          />
         </TouchableOpacity>
 
         {showCategoryPicker && (
@@ -319,10 +324,6 @@ const styles = StyleSheet.create({
   placeholderText: {
     fontSize: 16,
     color: '#999',
-  },
-  dropdownIcon: {
-    fontSize: 16,
-    color: '#666',
   },
   categoryList: {
     backgroundColor: '#fff',
