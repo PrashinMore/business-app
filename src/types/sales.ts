@@ -6,7 +6,7 @@ export interface SalesFilters {
   to?: string; // ISO 8601 date
   productId?: string; // Product UUID
   staff?: string; // Staff name or ID (partial match)
-  paymentType?: 'cash' | 'UPI';
+  paymentType?: 'cash' | 'UPI' | 'mixed';
   page?: number; // Page number (1-based, minimum 1)
   size?: number; // Page size (minimum 1)
   allOutlets?: boolean; // If true, view sales from all outlets (default: false)

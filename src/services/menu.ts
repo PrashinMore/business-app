@@ -280,15 +280,46 @@ export async function checkout(saleData: CreateSaleRequest): Promise<Sale | { id
       return { id: localId, offline: true };
     }
 
+    const submitSale = async (payload: CreateSaleRequest) =>
+      apiRequest(
+        '/sales',
+        {
+          method: 'POST',
+          body: JSON.stringify(payload),
+        },
+        true,
+      );
+
     // Attempt to create sale online
-    const response = await apiRequest('/sales', {
-      method: 'POST',
-      body: JSON.stringify(saleData),
-    }, true); // requiresOutlet: true
+    let response = await submitSale(saleData);
 
     if (!response.ok) {
       const error = await response.json();
-      throw new Error(error.message || 'Checkout failed');
+      const message = error?.message || 'Checkout failed';
+
+      // Backward-compatible retry for strict backend date parsing.
+      if (
+        typeof message === 'string' &&
+        message.toLowerCase().includes('date must be a valid iso 8601 date string')
+      ) {
+        const parsedDate = new Date(String(saleData.date));
+        if (!Number.isNaN(parsedDate.getTime())) {
+          const fallbackPayload: CreateSaleRequest = {
+            ...saleData,
+            // Alternate ISO flavor accepted by some strict validators.
+            date: parsedDate.toISOString().replace('.000Z', '+00:00'),
+          };
+          response = await submitSale(fallbackPayload);
+          if (response.ok) {
+            const sale: Sale = await response.json();
+            return sale;
+          }
+          const retryError = await response.json();
+          throw new Error(retryError?.message || message);
+        }
+      }
+
+      throw new Error(message);
     }
 
     const sale: Sale = await response.json();

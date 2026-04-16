@@ -34,7 +34,7 @@ export interface BillData {
   subtotal: number;
   discount?: number;
   totalAmount: number;
-  paymentType: 'cash' | 'UPI';
+  paymentType: 'cash' | 'UPI' | 'mixed';
   isPaid: boolean;
   cashierName?: string;
 }

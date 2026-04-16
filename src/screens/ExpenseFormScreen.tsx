@@ -9,6 +9,7 @@ import {
   ActivityIndicator,
   ScrollView,
 } from 'react-native';
+import DateTimePickerModal from 'react-native-modal-datetime-picker';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { Ionicons } from '@expo/vector-icons';
@@ -30,6 +31,7 @@ const ExpenseFormScreen: React.FC = () => {
 
   const [loading, setLoading] = useState(false);
   const [showCategoryPicker, setShowCategoryPicker] = useState(false);
+  const [isDatePickerVisible, setDatePickerVisible] = useState(false);
 
   const [formData, setFormData] = useState({
     category: '',
@@ -145,6 +147,14 @@ const ExpenseFormScreen: React.FC = () => {
     });
   };
 
+  const showDatePicker = () => setDatePickerVisible(true);
+  const hideDatePicker = () => setDatePickerVisible(false);
+  const handleDateConfirm = (date: Date) => {
+    const formattedDate = date.toISOString().split('T')[0];
+    setFormData((prev) => ({ ...prev, date: formattedDate }));
+    hideDatePicker();
+  };
+
   if (loading && !expense) {
     return (
       <View style={styles.centerContainer}>
@@ -219,14 +229,10 @@ const ExpenseFormScreen: React.FC = () => {
 
         {/* Date */}
         <Text style={styles.label}>Date *</Text>
-        <TextInput
-          style={styles.input}
-          value={formData.date}
-          onChangeText={(text) => setFormData({ ...formData, date: text })}
-          placeholder="YYYY-MM-DD"
-          placeholderTextColor="#999"
-          returnKeyType="next"
-        />
+        <TouchableOpacity style={styles.datePickerButton} onPress={showDatePicker}>
+          <Text style={styles.datePickerText}>{formData.date || 'Select date'}</Text>
+          <Ionicons name="calendar" size={20} color="#666" />
+        </TouchableOpacity>
         {formData.date && (
           <Text style={styles.dateDisplay}>
             {formatDateForDisplay(formData.date)}
@@ -270,6 +276,14 @@ const ExpenseFormScreen: React.FC = () => {
           <Text style={styles.cancelButtonText}>Cancel</Text>
         </TouchableOpacity>
       </View>
+      <DateTimePickerModal
+        isVisible={isDatePickerVisible}
+        mode="date"
+        onConfirm={handleDateConfirm}
+        onCancel={hideDatePicker}
+        maximumDate={new Date()}
+        date={formData.date ? new Date(formData.date) : new Date()}
+      />
     </ScrollView>
   );
 };
@@ -356,6 +370,20 @@ const styles = StyleSheet.create({
     fontSize: 16,
     borderWidth: 1,
     borderColor: '#ddd',
+  },
+  datePickerButton: {
+    backgroundColor: '#fff',
+    borderRadius: 8,
+    padding: 12,
+    borderWidth: 1,
+    borderColor: '#ddd',
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  datePickerText: {
+    fontSize: 16,
+    color: '#333',
   },
   textArea: {
     height: 80,

@@ -9,6 +9,7 @@ import {
   RefreshControl,
   TouchableOpacity,
   Platform,
+  TextInput,
 } from 'react-native';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -33,6 +34,9 @@ const SaleDetailsScreen: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [updatingPayment, setUpdatingPayment] = useState(false);
+  const [splitCashAmount, setSplitCashAmount] = useState('');
+  const [splitUpiAmount, setSplitUpiAmount] = useState('');
+  const [showPaymentModePicker, setShowPaymentModePicker] = useState(false);
 
   // Extract product IDs from sale items for fetching names
   const productIds = sale?.items.map(item => item.productId) || [];
@@ -60,7 +64,7 @@ const SaleDetailsScreen: React.FC = () => {
       items: billItems,
       subtotal: Number(sale.totalAmount),
       totalAmount: Number(sale.totalAmount),
-      paymentType: (sale.paymentType as 'cash' | 'UPI') || 'cash',
+      paymentType: (sale.paymentType as 'cash' | 'UPI' | 'mixed') || 'cash',
       isPaid: sale.isPaid,
       cashierName: user?.name,
     };
@@ -106,19 +110,63 @@ const SaleDetailsScreen: React.FC = () => {
     }
   };
 
-  const handleUpdatePaymentType = async (paymentType: 'cash' | 'UPI') => {
+  const handleUpdatePaymentType = async (paymentType: 'cash' | 'UPI' | 'mixed') => {
     if (!sale) return;
 
     try {
       setUpdatingPayment(true);
-      const updatedSale = await updateSalePayment(sale.id, { paymentType });
-      setSale(updatedSale);
-      Alert.alert('Success', `Payment type updated to ${paymentType.toUpperCase()}`);
+      if (paymentType === 'mixed') {
+        const cashAmount = Number(splitCashAmount || '0');
+        const upiAmount = Number(splitUpiAmount || '0');
+        const totalPaid = Number((cashAmount + upiAmount).toFixed(2));
+        const totalAmount = Number(sale.totalAmount);
+
+        if (cashAmount < 0 || upiAmount < 0) {
+          Alert.alert('Invalid split', 'Cash and UPI amounts cannot be negative.');
+          setUpdatingPayment(false);
+          return;
+        }
+        if (totalPaid <= 0) {
+          Alert.alert('Invalid split', 'Enter cash and/or UPI amount.');
+          setUpdatingPayment(false);
+          return;
+        }
+        if (totalPaid > totalAmount) {
+          Alert.alert('Invalid split', 'Split amount cannot exceed sale total.');
+          setUpdatingPayment(false);
+          return;
+        }
+
+        const updatedSale = await updateSalePayment(sale.id, {
+          paymentType: 'mixed',
+          cashAmount: Number(cashAmount.toFixed(2)),
+          upiAmount: Number(upiAmount.toFixed(2)),
+          isPaid: Number(totalPaid.toFixed(2)) === Number(totalAmount.toFixed(2)),
+        });
+        setSale(updatedSale);
+        Alert.alert('Success', 'Payment type updated to MIXED');
+      } else {
+        const updatedSale = await updateSalePayment(sale.id, { paymentType });
+        setSale(updatedSale);
+        Alert.alert('Success', `Payment type updated to ${paymentType.toUpperCase()}`);
+      }
     } catch (error: any) {
       Alert.alert('Error', error.message || 'Failed to update payment type');
     } finally {
       setUpdatingPayment(false);
     }
+  };
+
+  useEffect(() => {
+    if (!sale) return;
+    setSplitCashAmount(String(Number(sale.cashAmount || 0)));
+    setSplitUpiAmount(String(Number(sale.upiAmount || 0)));
+  }, [sale?.id, sale?.cashAmount, sale?.upiAmount]);
+
+  const getPaymentModeLabel = (mode: 'cash' | 'UPI' | 'mixed') => {
+    if (mode === 'cash') return 'All Cash';
+    if (mode === 'UPI') return 'All UPI';
+    return 'Mixed Split';
   };
 
   const formatDate = (dateString: string) => {
@@ -205,26 +253,77 @@ const SaleDetailsScreen: React.FC = () => {
                 {(sale.paymentType || 'cash').toUpperCase()}
               </Text>
             </TouchableOpacity>
-            {sale.paymentType === 'cash' && (
-              <TouchableOpacity
-                style={[styles.paymentTypeButton, styles.paymentTypeButtonUPI]}
-                onPress={() => handleUpdatePaymentType('UPI')}
-                disabled={updatingPayment}
-              >
-                <Text style={styles.paymentTypeButtonText}>Switch to UPI</Text>
-              </TouchableOpacity>
-            )}
-            {sale.paymentType === 'UPI' && (
-              <TouchableOpacity
-                style={[styles.paymentTypeButton, styles.paymentTypeButtonCash]}
-                onPress={() => handleUpdatePaymentType('cash')}
-                disabled={updatingPayment}
-              >
-                <Text style={styles.paymentTypeButtonText}>Switch to Cash</Text>
-              </TouchableOpacity>
-            )}
+            <TouchableOpacity
+              style={[styles.paymentTypeButton, styles.paymentTypeButtonSelector]}
+              onPress={() => setShowPaymentModePicker((prev) => !prev)}
+              disabled={updatingPayment}
+            >
+              <Text style={styles.paymentTypeButtonText}>Change Mode</Text>
+            </TouchableOpacity>
           </View>
         </View>
+        {showPaymentModePicker && (
+          <View style={styles.paymentModeDropdown}>
+            {(['cash', 'UPI', 'mixed'] as const).map((mode) => (
+              <TouchableOpacity
+                key={mode}
+                style={[
+                  styles.paymentModeOption,
+                  sale.paymentType === mode && styles.paymentModeOptionActive,
+                ]}
+                onPress={() => {
+                  setShowPaymentModePicker(false);
+                  if (sale.paymentType !== mode) {
+                    handleUpdatePaymentType(mode);
+                  }
+                }}
+                disabled={updatingPayment}
+              >
+                <Text
+                  style={[
+                    styles.paymentModeOptionText,
+                    sale.paymentType === mode && styles.paymentModeOptionTextActive,
+                  ]}
+                >
+                  {getPaymentModeLabel(mode)}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+        )}
+        {sale.paymentType === 'mixed' && (
+          <View style={styles.splitSection}>
+            <View style={styles.splitInputWrap}>
+              <Text style={styles.splitLabel}>Cash</Text>
+              <TextInput
+                style={styles.splitInput}
+                keyboardType="decimal-pad"
+                value={splitCashAmount}
+                onChangeText={setSplitCashAmount}
+                placeholder="0.00"
+              />
+            </View>
+            <View style={styles.splitInputWrap}>
+              <Text style={styles.splitLabel}>UPI</Text>
+              <TextInput
+                style={styles.splitInput}
+                keyboardType="decimal-pad"
+                value={splitUpiAmount}
+                onChangeText={setSplitUpiAmount}
+                placeholder="0.00"
+              />
+            </View>
+            <TouchableOpacity
+              style={[styles.paymentTypeButton, styles.paymentTypeButtonMixed]}
+              onPress={() => handleUpdatePaymentType('mixed')}
+              disabled={updatingPayment}
+            >
+              <Text style={styles.paymentTypeButtonText}>
+                {updatingPayment ? 'Updating...' : 'Update Split'}
+              </Text>
+            </TouchableOpacity>
+          </View>
+        )}
 
         <View style={styles.infoRow}>
           <Text style={styles.infoLabel}>Payment Status:</Text>
@@ -452,10 +551,72 @@ const styles = StyleSheet.create({
     borderColor: '#9C27B0',
     backgroundColor: '#f3e5f5',
   },
+  paymentTypeButtonMixed: {
+    borderColor: '#ff9800',
+    backgroundColor: '#fff3e0',
+  },
+  paymentTypeButtonSelector: {
+    borderColor: '#9ca3af',
+    backgroundColor: '#f9fafb',
+  },
   paymentTypeButtonText: {
     fontSize: 12,
     fontWeight: '600',
     color: '#666',
+  },
+  splitSection: {
+    marginTop: 10,
+    gap: 8,
+    alignItems: 'flex-end',
+  },
+  splitInputWrap: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    width: '100%',
+  },
+  splitLabel: {
+    width: 44,
+    fontSize: 12,
+    color: '#666',
+    fontWeight: '600',
+  },
+  splitInput: {
+    flex: 1,
+    borderWidth: 1,
+    borderColor: '#ddd',
+    borderRadius: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    fontSize: 14,
+    color: '#333',
+    backgroundColor: '#fff',
+  },
+  paymentModeDropdown: {
+    marginTop: 8,
+    borderWidth: 1,
+    borderColor: '#e5e7eb',
+    borderRadius: 8,
+    backgroundColor: '#fff',
+    overflow: 'hidden',
+  },
+  paymentModeOption: {
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f3f4f6',
+  },
+  paymentModeOptionActive: {
+    backgroundColor: '#eef6ff',
+  },
+  paymentModeOptionText: {
+    fontSize: 13,
+    color: '#374151',
+    fontWeight: '500',
+  },
+  paymentModeOptionTextActive: {
+    color: '#1d4ed8',
+    fontWeight: '700',
   },
   paymentStatusContainer: {
     flexDirection: 'row',

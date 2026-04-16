@@ -12,6 +12,7 @@ import {
   Modal,
   TextInput,
 } from 'react-native';
+import DateTimePickerModal from 'react-native-modal-datetime-picker';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { Ionicons } from '@expo/vector-icons';
@@ -43,6 +44,12 @@ const CartScreen: React.FC = () => {
   const [splitCashAmount, setSplitCashAmount] = useState<string>('');
   const [splitUpiAmount, setSplitUpiAmount] = useState<string>('');
   const [isPaid, setIsPaid] = useState(false);
+  const [saleDate, setSaleDate] = useState<Date>(() => {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    return today;
+  });
+  const [isSaleDatePickerVisible, setSaleDatePickerVisible] = useState(false);
   const [selectedTableId, setSelectedTableId] = useState<string | null>(null);
   const [tables, setTables] = useState<DiningTable[]>([]);
   const [showTablePicker, setShowTablePicker] = useState(false);
@@ -162,6 +169,29 @@ const CartScreen: React.FC = () => {
 
   const selectedTable = tables.find(t => t.id === selectedTableId);
 
+  const showSaleDatePicker = () => setSaleDatePickerVisible(true);
+  const hideSaleDatePicker = () => setSaleDatePickerVisible(false);
+  const handleSaleDateConfirm = (date: Date) => {
+    const next = new Date(date);
+    next.setHours(0, 0, 0, 0);
+    setSaleDate(next);
+    hideSaleDatePicker();
+  };
+
+  const getMinAllowedSaleDate = () => {
+    const d = new Date();
+    d.setDate(d.getDate() - 14);
+    d.setHours(0, 0, 0, 0);
+    return d;
+  };
+
+  const formatSaleDate = (date: Date) => {
+    const y = date.getFullYear();
+    const m = String(date.getMonth() + 1).padStart(2, '0');
+    const d = String(date.getDate()).padStart(2, '0');
+    return `${y}-${m}-${d}`;
+  };
+
   const handleUpdateQuantity = (productId: string, change: number) => {
     const cartItem = cart.find(item => item.productId === productId);
     if (!cartItem) return;
@@ -251,6 +281,16 @@ const CartScreen: React.FC = () => {
       const parsedUpiAmount = Number(splitUpiAmount || '0');
       const splitTotal = Number((parsedCashAmount + parsedUpiAmount).toFixed(2));
       const roundedFinalTotal = Number(finalTotalAmount.toFixed(2));
+      if (Number.isNaN(saleDate.getTime())) {
+        Alert.alert('Invalid date', 'Please select a valid sale date.');
+        setCheckingOut(false);
+        return;
+      }
+      if (saleDate < getMinAllowedSaleDate()) {
+        Alert.alert('Date out of range', 'You can record sales up to 2 weeks back only.');
+        setCheckingOut(false);
+        return;
+      }
 
       if (paymentType === 'mixed') {
         if (parsedCashAmount < 0 || parsedUpiAmount < 0) {
@@ -270,8 +310,12 @@ const CartScreen: React.FC = () => {
         }
       }
 
+      // Use a stable UTC timestamp string for selected business date.
+      // Noon UTC avoids timezone edge cases while preserving the chosen calendar date.
+      const saleDateTimeIso = `${formatSaleDate(saleDate)}T12:00:00.000Z`;
+
       const saleData = {
-        date: new Date().toISOString(),
+        date: saleDateTimeIso,
         items,
         totalAmount: Number(finalTotalAmount.toFixed(2)),
         soldBy: user.id,
@@ -299,7 +343,7 @@ const CartScreen: React.FC = () => {
 
       // Store sale data before clearing cart for printing
       const saleId = sale.id;
-      const saleDate = saleData.date;
+      const saleDateIso = saleData.date;
 
       // Check if sale was queued offline
       if ('offline' in sale && sale.offline) {
@@ -339,7 +383,7 @@ const CartScreen: React.FC = () => {
 
         const printBillData: BillData = {
           saleId,
-          date: saleDate,
+          date: saleDateIso,
           items: printBillItems,
           subtotal: subtotalAmount,
           totalAmount: finalTotalAmount,
@@ -486,6 +530,14 @@ const CartScreen: React.FC = () => {
                 )}
               </View>
             )}
+
+            <View style={styles.paymentTypeSection}>
+              <Text style={styles.paymentTypeLabel}>Sale Date:</Text>
+              <TouchableOpacity style={styles.saleDateButton} onPress={showSaleDatePicker}>
+                <Text style={styles.saleDateText}>{formatSaleDate(saleDate)}</Text>
+                <Ionicons name="calendar" size={18} color="#666" />
+              </TouchableOpacity>
+            </View>
 
             <View style={styles.paymentTypeSection}>
               <Text style={styles.paymentTypeLabel}>Payment Method:</Text>
@@ -959,6 +1011,16 @@ const CartScreen: React.FC = () => {
           </View>
         </View>
       </Modal>
+
+      <DateTimePickerModal
+        isVisible={isSaleDatePickerVisible}
+        mode="date"
+        onConfirm={handleSaleDateConfirm}
+        onCancel={hideSaleDatePicker}
+        minimumDate={getMinAllowedSaleDate()}
+        maximumDate={new Date()}
+        date={saleDate}
+      />
     </View>
   );
 };
@@ -1102,6 +1164,20 @@ const styles = StyleSheet.create({
   },
   paymentStatusSection: {
     marginBottom: 16,
+  },
+  saleDateButton: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    backgroundColor: '#fff',
+    borderRadius: 8,
+    padding: 12,
+    borderWidth: 1,
+    borderColor: '#ddd',
+  },
+  saleDateText: {
+    fontSize: 16,
+    color: '#333',
   },
   section: {
     marginBottom: 16,

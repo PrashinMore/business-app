@@ -7,6 +7,16 @@
 import { apiRequest } from './auth';
 import { Sale, SalesFilters, DailyTotal, PaymentTypeTotals } from '../types/sales';
 
+async function parseJsonSafely(response: Response): Promise<any> {
+  const raw = await response.text();
+  if (!raw) return null;
+  try {
+    return JSON.parse(raw);
+  } catch {
+    return { message: `Non-JSON response (${response.status}): ${raw.slice(0, 120)}` };
+  }
+}
+
 /**
  * List sales with optional filters and pagination
  * @param filters - Optional filters for date range, product, staff, payment type, pagination, and outlet scope
@@ -34,12 +44,10 @@ export async function listSales(filters: SalesFilters = {}): Promise<{ sales: Sa
       method: 'GET',
     }, requiresOutlet);
 
+    const data = await parseJsonSafely(response);
     if (!response.ok) {
-      const error = await response.json();
-      throw new Error(error.message || 'Failed to load sales');
+      throw new Error(data?.message || `Failed to load sales (${response.status})`);
     }
-
-    const data = await response.json();
     
     // Check if response is paginated (has sales and total) or legacy format (array)
     if (data && typeof data === 'object' && 'sales' in data && 'total' in data) {
@@ -65,12 +73,12 @@ export async function getSaleDetails(saleId: string): Promise<Sale> {
       method: 'GET',
     }, true); // requiresOutlet: true
 
+    const data = await parseJsonSafely(response);
     if (!response.ok) {
-      const error = await response.json();
-      throw new Error(error.message || 'Failed to load sale details');
+      throw new Error(data?.message || `Failed to load sale details (${response.status})`);
     }
 
-    const sale: Sale = await response.json();
+    const sale: Sale = data as Sale;
     return sale;
   } catch (error) {
     console.error('Get sale details error:', error);
@@ -101,12 +109,12 @@ export async function getDailyTotals(from?: string, to?: string, allOutlets?: bo
       method: 'GET',
     }, requiresOutlet);
 
+    const data = await parseJsonSafely(response);
     if (!response.ok) {
-      const error = await response.json();
-      throw new Error(error.message || 'Failed to load daily totals');
+      throw new Error(data?.message || `Failed to load daily totals (${response.status})`);
     }
 
-    const totals: DailyTotal[] = await response.json();
+    const totals: DailyTotal[] = data as DailyTotal[];
     return totals;
   } catch (error) {
     console.error('Get daily totals error:', error);
@@ -142,12 +150,12 @@ export async function getPaymentTypeTotals(
       method: 'GET',
     }, requiresOutlet);
 
+    const data = await parseJsonSafely(response);
     if (!response.ok) {
-      const error = await response.json();
-      throw new Error(error.message || 'Failed to load payment type totals');
+      throw new Error(data?.message || `Failed to load payment type totals (${response.status})`);
     }
 
-    const totals: PaymentTypeTotals = await response.json();
+    const totals: PaymentTypeTotals = data as PaymentTypeTotals;
     return totals;
   } catch (error) {
     console.error('Get payment type totals error:', error);
@@ -163,7 +171,12 @@ export async function getPaymentTypeTotals(
  */
 export async function updateSalePayment(
   saleId: string,
-  updates: { paymentType?: 'cash' | 'UPI'; isPaid?: boolean }
+  updates: {
+    paymentType?: 'cash' | 'UPI' | 'mixed';
+    cashAmount?: number;
+    upiAmount?: number;
+    isPaid?: boolean;
+  }
 ): Promise<Sale> {
   try {
     // Validate that at least one field is provided
@@ -176,12 +189,12 @@ export async function updateSalePayment(
       body: JSON.stringify(updates),
     }, true); // requiresOutlet: true
 
+    const data = await parseJsonSafely(response);
     if (!response.ok) {
-      const error = await response.json();
-      throw new Error(error.message || 'Failed to update sale payment');
+      throw new Error(data?.message || `Failed to update sale payment (${response.status})`);
     }
 
-    const sale: Sale = await response.json();
+    const sale: Sale = data as Sale;
     return sale;
   } catch (error) {
     console.error('Update sale payment error:', error);
