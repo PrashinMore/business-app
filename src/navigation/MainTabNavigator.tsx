@@ -1,6 +1,6 @@
 import React from 'react';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
-import { Text } from 'react-native';
+import { TouchableOpacity } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { fonts } from '../styles/fonts';
@@ -32,27 +32,41 @@ const MainTabNavigator: React.FC = () => {
 
   return (
     <Tab.Navigator
-      screenOptions={{
+      screenOptions={({ navigation }) => ({
         headerShown: true,
         headerTitleStyle: {
           fontFamily: fonts.medium,
         },
+        headerRight: () => (
+          <TouchableOpacity
+            onPress={() => navigation.navigate('Profile')}
+            style={{ marginRight: 12 }}
+            accessibilityLabel="Open profile"
+          >
+            <Ionicons name="person-circle-outline" size={26} color="#007AFF" />
+          </TouchableOpacity>
+        ),
         tabBarActiveTintColor: '#007AFF',
         tabBarInactiveTintColor: '#999',
         tabBarStyle: {
-          height: 60 + Math.max(insets.bottom, 0),
-          paddingBottom: Math.max(insets.bottom, 8),
-          paddingTop: 8,
+          height: 72 + Math.max(insets.bottom, 0),
+          paddingBottom: Math.max(insets.bottom, 10),
+          paddingTop: 6,
           borderTopWidth: 1,
           borderTopColor: '#e0e0e0',
           backgroundColor: '#fff',
         },
+        tabBarItemStyle: {
+          paddingVertical: 2,
+        },
         tabBarLabelStyle: {
-          fontSize: 12,
+          fontSize: 11,
+          lineHeight: 13,
           fontWeight: '600',
           fontFamily: fonts.medium,
+          marginBottom: 2,
         },
-      }}
+      })}
     >
       <Tab.Screen
         name="Home"
@@ -120,6 +134,8 @@ const MainTabNavigator: React.FC = () => {
         component={ProfileScreen}
         options={{
           title: 'Profile',
+          tabBarButton: () => null,
+          tabBarItemStyle: { display: 'none' },
           tabBarIcon: ({ color, size }) => (
             <Ionicons name="person" size={size} color={color} />
           ),

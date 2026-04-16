@@ -39,7 +39,9 @@ const CartScreen: React.FC = () => {
   const { isOnline, queuedSalesCount, manualSync } = useSync();
   const { onSaleCreated } = useData();
   const [checkingOut, setCheckingOut] = useState(false);
-  const [paymentType, setPaymentType] = useState<'cash' | 'UPI'>('cash');
+  const [paymentType, setPaymentType] = useState<'cash' | 'UPI' | 'mixed'>('cash');
+  const [splitCashAmount, setSplitCashAmount] = useState<string>('');
+  const [splitUpiAmount, setSplitUpiAmount] = useState<string>('');
   const [isPaid, setIsPaid] = useState(false);
   const [selectedTableId, setSelectedTableId] = useState<string | null>(null);
   const [tables, setTables] = useState<DiningTable[]>([]);
@@ -245,16 +247,40 @@ const CartScreen: React.FC = () => {
         sellingPrice: item.sellingPrice,
       }));
 
-      // Ensure paymentType is valid (handle 'mixed' if it exists)
-      const validPaymentType: 'cash' | 'UPI' = paymentType === 'mixed' ? 'cash' : paymentType;
+      const parsedCashAmount = Number(splitCashAmount || '0');
+      const parsedUpiAmount = Number(splitUpiAmount || '0');
+      const splitTotal = Number((parsedCashAmount + parsedUpiAmount).toFixed(2));
+      const roundedFinalTotal = Number(finalTotalAmount.toFixed(2));
+
+      if (paymentType === 'mixed') {
+        if (parsedCashAmount < 0 || parsedUpiAmount < 0) {
+          Alert.alert('Invalid split', 'Cash and UPI amounts cannot be negative.');
+          setCheckingOut(false);
+          return;
+        }
+        if (splitTotal <= 0) {
+          Alert.alert('Invalid split', 'Enter cash and/or UPI amount for split payment.');
+          setCheckingOut(false);
+          return;
+        }
+        if (splitTotal > roundedFinalTotal) {
+          Alert.alert('Invalid split', 'Split amount cannot exceed total bill amount.');
+          setCheckingOut(false);
+          return;
+        }
+      }
 
       const saleData = {
         date: new Date().toISOString(),
         items,
         totalAmount: Number(finalTotalAmount.toFixed(2)),
         soldBy: user.id,
-        paymentType: validPaymentType,
-        isPaid,
+        paymentType,
+        ...(paymentType === 'mixed' && {
+          cashAmount: Number(parsedCashAmount.toFixed(2)),
+          upiAmount: Number(parsedUpiAmount.toFixed(2)),
+        }),
+        isPaid: paymentType === 'mixed' ? splitTotal === roundedFinalTotal : isPaid,
         ...(selectedTableId && { tableId: selectedTableId }),
         // CRM fields
         ...(selectedCustomer && { customerId: selectedCustomer.id }),
@@ -285,7 +311,7 @@ const CartScreen: React.FC = () => {
 
         Alert.alert(
           'Order Queued Offline',
-          `Your order has been queued for processing when connection is restored.\n\nLocal ID: ${sale.id}\nTotal: ₹${finalTotalAmount.toFixed(2)}\nPayment: ${validPaymentType.toUpperCase()}\nStatus: ${isPaid ? 'Paid' : 'Pending'}\n\n${queuedSalesCount + 1} order(s) pending sync.`,
+          `Your order has been queued for processing when connection is restored.\n\nLocal ID: ${sale.id}\nTotal: ₹${finalTotalAmount.toFixed(2)}\nPayment: ${paymentType.toUpperCase()}\nStatus: ${(paymentType === 'mixed' ? splitTotal === roundedFinalTotal : isPaid) ? 'Paid' : 'Pending'}\n\n${queuedSalesCount + 1} order(s) pending sync.`,
           [
             { text: 'OK' },
             ...(isOnline ? [] : [
@@ -317,8 +343,8 @@ const CartScreen: React.FC = () => {
           items: printBillItems,
           subtotal: subtotalAmount,
           totalAmount: finalTotalAmount,
-          paymentType: validPaymentType,
-          isPaid,
+          paymentType,
+          isPaid: paymentType === 'mixed' ? splitTotal === roundedFinalTotal : isPaid,
           cashierName: user?.name,
         };
 
@@ -339,7 +365,7 @@ const CartScreen: React.FC = () => {
           // Show alert with print option
           Alert.alert(
             'Order Placed! 🎉',
-            `Your order has been placed successfully.\n\nSale ID: ${sale.id.substring(0, 8).toUpperCase()}\nTotal: ₹${finalTotalAmount.toFixed(2)}\nPayment: ${validPaymentType.toUpperCase()}\nStatus: ${isPaid ? 'Paid' : 'Pending'}`,
+            `Your order has been placed successfully.\n\nSale ID: ${sale.id.substring(0, 8).toUpperCase()}\nTotal: ₹${finalTotalAmount.toFixed(2)}\nPayment: ${paymentType.toUpperCase()}\nStatus: ${(paymentType === 'mixed' ? splitTotal === roundedFinalTotal : isPaid) ? 'Paid' : 'Pending'}`,
             [
               { text: 'Done', style: 'cancel' },
               {
@@ -496,8 +522,57 @@ const CartScreen: React.FC = () => {
                     UPI
                   </Text>
                 </TouchableOpacity>
+                <TouchableOpacity
+                  style={[
+                    styles.paymentTypeButton,
+                    paymentType === 'mixed' && styles.paymentTypeButtonActive,
+                  ]}
+                  onPress={() => setPaymentType('mixed')}
+                >
+                  <Text
+                    style={[
+                      styles.paymentTypeButtonText,
+                      paymentType === 'mixed' && styles.paymentTypeButtonTextActive,
+                    ]}
+                  >
+                    Split
+                  </Text>
+                </TouchableOpacity>
               </View>
             </View>
+
+            {paymentType === 'mixed' && (
+              <View style={styles.section}>
+                <Text style={styles.sectionLabel}>Split Amount</Text>
+                <View style={styles.splitRow}>
+                  <View style={styles.splitInputContainer}>
+                    <Text style={styles.splitInputLabel}>Cash</Text>
+                    <TextInput
+                      style={styles.input}
+                      placeholder="0.00"
+                      keyboardType="decimal-pad"
+                      value={splitCashAmount}
+                      onChangeText={setSplitCashAmount}
+                      placeholderTextColor="#9ca3af"
+                    />
+                  </View>
+                  <View style={styles.splitInputContainer}>
+                    <Text style={styles.splitInputLabel}>UPI</Text>
+                    <TextInput
+                      style={styles.input}
+                      placeholder="0.00"
+                      keyboardType="decimal-pad"
+                      value={splitUpiAmount}
+                      onChangeText={setSplitUpiAmount}
+                      placeholderTextColor="#9ca3af"
+                    />
+                  </View>
+                </View>
+                <Text style={styles.splitHint}>
+                  Enter paid amounts. Remaining amount will stay pending.
+                </Text>
+              </View>
+            )}
 
             <View style={styles.paymentStatusSection}>
               <Text style={styles.paymentTypeLabel}>Payment Status:</Text>
@@ -1244,6 +1319,24 @@ const styles = StyleSheet.create({
   },
   paymentTypeButtonTextActive: {
     color: '#007AFF',
+  },
+  splitRow: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  splitInputContainer: {
+    flex: 1,
+  },
+  splitInputLabel: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#4b5563',
+    marginBottom: 6,
+  },
+  splitHint: {
+    fontSize: 12,
+    color: '#6b7280',
+    marginTop: 8,
   },
   totalSection: {
     flexDirection: 'row',

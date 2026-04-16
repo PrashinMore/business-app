@@ -54,7 +54,9 @@ export interface CreateSaleRequest {
   }[];
   totalAmount: number;
   soldBy: string;
-  paymentType?: 'cash' | 'UPI';
+  paymentType?: 'cash' | 'UPI' | 'mixed';
+  cashAmount?: number;
+  upiAmount?: number;
   isPaid?: boolean;
   tableId?: string; // Optional table ID to assign table during sale creation
   // CRM fields
