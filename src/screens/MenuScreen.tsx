@@ -18,6 +18,13 @@ import { useAuth } from '../context/AuthContext';
 import { useData } from '../context/DataContext';
 import { Product } from '../types/menu';
 import { API_BASE_URL } from '../config/api';
+import {
+  canAddMore,
+  getAvailability,
+  getInventoryType,
+  isInventoryTracked,
+  isRecipeProduct,
+} from '../services/inventory';
 
 const MenuScreen: React.FC = () => {
   const { menuItems, menuLoading, menuRefreshing, loadMenu, categories, loadCategories } = useData();
@@ -84,13 +91,18 @@ const MenuScreen: React.FC = () => {
   };
 
   const handleAddToCart = (product: Product) => {
-    if (product.stock <= 0) {
+    // Only SIMPLE+tracked items are blocked on the client. For RECIPE the
+    // backend validates ingredient stock at checkout — blocking here would
+    // prevent cashiers from ever selling recipe-driven dishes.
+    const simpleOutOfStock =
+      isInventoryTracked(product) && !isRecipeProduct(product) && product.stock <= 0;
+    if (simpleOutOfStock) {
       Alert.alert('Out of Stock', 'This item is currently unavailable');
       return;
     }
 
     const cartItem = cart.find(item => item.productId === product.id);
-    if (cartItem && cartItem.quantity >= product.stock) {
+    if (cartItem && !canAddMore(product, cartItem.quantity)) {
       Alert.alert('Stock Limit', 'Cannot add more. Stock limit reached.');
       return;
     }
@@ -113,7 +125,12 @@ const MenuScreen: React.FC = () => {
       return;
     }
 
-    if (newQuantity > product.stock) {
+    // Only SIMPLE+tracked items have a meaningful client-side cap.
+    if (
+      isInventoryTracked(product) &&
+      !isRecipeProduct(product) &&
+      newQuantity > product.stock
+    ) {
       Alert.alert('Stock Limit', 'Quantity exceeds available stock');
       return;
     }
@@ -123,10 +140,43 @@ const MenuScreen: React.FC = () => {
 
   const renderMenuItem = ({ item }: { item: Product }) => {
     const cartItem = cart.find(ci => ci.productId === item.id);
-    const isOutOfStock = item.stock <= 0;
+    const inventoryType = getInventoryType(item);
+    const tracked = isInventoryTracked(item);
+    const availability = getAvailability(item);
+    // Only SIMPLE+tracked items can be "out of stock" on the client. RECIPE
+    // items rely on backend validation; untracked items are always sellable.
+    const isHardOutOfStock =
+      tracked && inventoryType === 'SIMPLE' && item.stock <= 0;
+    const canIncrement = cartItem ? canAddMore(item, cartItem.quantity) : true;
+
     const imageUrl = item.imageUrl
       ? `${API_BASE_URL}${item.imageUrl}`
       : null;
+
+    // Stock / availability line. SIMPLE shows a numeric count; RECIPE shows
+    // a colour-coded badge (numeric count would be misleading since it comes
+    // from ingredients, not the dish itself).
+    let stockLine: React.ReactNode;
+    if (!tracked) {
+      stockLine = <Text style={styles.availabilityUntracked}>Always available</Text>;
+    } else if (inventoryType === 'RECIPE') {
+      if (availability === 'out') {
+        stockLine = <Text style={styles.availabilityOut}>❌ Out of stock</Text>;
+      } else if (availability === 'low') {
+        stockLine = <Text style={styles.availabilityLow}>⚠️ Low stock</Text>;
+      } else {
+        stockLine = <Text style={styles.availabilityOk}>✅ Available</Text>;
+      }
+    } else if (item.stock > 0) {
+      const low = availability === 'low';
+      stockLine = (
+        <Text style={low ? styles.availabilityLow : styles.stockText}>
+          {low ? '⚠️ ' : ''}In stock: {item.stock} {item.unit}
+        </Text>
+      );
+    } else {
+      stockLine = <Text style={styles.outOfStockText}>Out of Stock</Text>;
+    }
 
     return (
       <View style={styles.menuItem}>
@@ -137,13 +187,9 @@ const MenuScreen: React.FC = () => {
           <Text style={styles.productName}>{item.name}</Text>
           <Text style={styles.productCategory}>{item.category}</Text>
           <Text style={styles.productPrice}>₹{Number(item.sellingPrice).toFixed(2)}</Text>
-          {item.stock > 0 ? (
-            <Text style={styles.stockText}>In Stock: {item.stock} {item.unit}</Text>
-          ) : (
-            <Text style={styles.outOfStockText}>Out of Stock</Text>
-          )}
+          <View style={styles.availabilityRow}>{stockLine}</View>
 
-          {isOutOfStock ? (
+          {isHardOutOfStock ? (
             <Text style={styles.disabledButton}>Unavailable</Text>
           ) : cartItem ? (
             <View style={styles.quantityControls}>
@@ -157,10 +203,10 @@ const MenuScreen: React.FC = () => {
               <TouchableOpacity
                 style={[
                   styles.quantityButton,
-                  cartItem.quantity >= item.stock && styles.quantityButtonDisabled,
+                  !canIncrement && styles.quantityButtonDisabled,
                 ]}
                 onPress={() => handleUpdateQuantity(item, 1)}
-                disabled={cartItem.quantity >= item.stock}
+                disabled={!canIncrement}
               >
                 <Text style={styles.quantityButtonText}>+</Text>
               </TouchableOpacity>
@@ -385,13 +431,33 @@ const styles = StyleSheet.create({
   stockText: {
     fontSize: 12,
     color: '#666',
-    marginBottom: 12,
   },
   outOfStockText: {
     fontSize: 12,
     color: '#ff3b30',
-    marginBottom: 12,
     fontWeight: '600',
+  },
+  availabilityRow: {
+    marginBottom: 12,
+  },
+  availabilityOk: {
+    fontSize: 12,
+    color: '#15803d',
+    fontWeight: '600',
+  },
+  availabilityLow: {
+    fontSize: 12,
+    color: '#b45309',
+    fontWeight: '600',
+  },
+  availabilityOut: {
+    fontSize: 12,
+    color: '#ff3b30',
+    fontWeight: '600',
+  },
+  availabilityUntracked: {
+    fontSize: 12,
+    color: '#94a3b8',
   },
   quantityControls: {
     flexDirection: 'row',

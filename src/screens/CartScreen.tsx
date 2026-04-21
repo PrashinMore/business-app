@@ -22,6 +22,15 @@ import { useSync } from '../context/SyncContext';
 import { useData } from '../context/DataContext';
 import { checkout } from '../services/menu';
 import { CartItem } from '../types/menu';
+import {
+  canAddMore,
+  cartHasRecipeItems,
+  classifyCheckoutError,
+  getInventoryType,
+  isInventoryTracked,
+  isRecipeProduct,
+  maxClientQuantity,
+} from '../services/inventory';
 import { API_BASE_URL } from '../config/api';
 import { RootStackParamList } from '../navigation/AppNavigator';
 import { BillData, BillItem } from './PrintBillScreen';
@@ -75,6 +84,14 @@ const CartScreen: React.FC = () => {
   }>>([]);
   const [redemptionDiscount, setRedemptionDiscount] = useState<number>(0);
   const [loadingEligibleRewards, setLoadingEligibleRewards] = useState(false);
+  /**
+   * Product IDs for which the backend reported an ingredient-stock failure.
+   * We highlight these rows so the cashier can remove / reduce them before
+   * retrying. Cleared on any cart edit and on a successful checkout.
+   */
+  const [ingredientFailureIds, setIngredientFailureIds] = useState<Set<string>>(
+    () => new Set(),
+  );
   
   // Ref to track if we should print after checkout
   const printAfterCheckoutRef = useRef(false);
@@ -199,15 +216,29 @@ const CartScreen: React.FC = () => {
     const newQuantity = cartItem.quantity + change;
     if (newQuantity <= 0) {
       removeFromCart(productId);
+      clearIngredientFailureFor(productId);
       return;
     }
 
-    if (newQuantity > cartItem.product.stock) {
+    // Only enforce a hard cap for SIMPLE+tracked items. RECIPE / untracked
+    // quantities are validated on the backend (against ingredient stock).
+    if (newQuantity > maxClientQuantity(cartItem.product)) {
       Alert.alert('Stock Limit', 'Quantity exceeds available stock');
       return;
     }
 
     updateQuantity(productId, newQuantity);
+    // Any qty change invalidates the previous ingredient-failure highlight.
+    clearIngredientFailureFor(productId);
+  };
+
+  const clearIngredientFailureFor = (productId: string) => {
+    setIngredientFailureIds((prev) => {
+      if (!prev.has(productId)) return prev;
+      const next = new Set(prev);
+      next.delete(productId);
+      return next;
+    });
   };
 
   const handleRemoveItem = (productId: string) => {
@@ -225,17 +256,47 @@ const CartScreen: React.FC = () => {
     );
   };
 
-  const handleCheckout = async () => {
+  /**
+   * Public entry point: shows an offline-warn confirmation when the cart
+   * contains RECIPE items before dispatching the actual checkout.
+   * Ingredient stock is only authoritative on the backend, so an offline
+   * sale cannot pre-validate it — the cashier should know upfront.
+   */
+  const handleCheckout = () => {
     if (cart.length === 0) {
       Alert.alert('Empty Cart', 'Please add items to cart');
       return;
     }
-
     if (!user) {
       Alert.alert('Error', 'User information not available');
       return;
     }
 
+    if (!isOnline && cartHasRecipeItems(cart)) {
+      Alert.alert(
+        'Offline sale — ingredients not validated',
+        '⚠️ Ingredient stock will be validated when back online. If ingredients are short, this sale may be rejected during sync.',
+        [
+          {
+            text: 'Cancel',
+            style: 'cancel',
+            onPress: () => {
+              printAfterCheckoutRef.current = false;
+            },
+          },
+          {
+            text: 'Queue anyway',
+            onPress: () => runCheckout(),
+          },
+        ],
+      );
+      return;
+    }
+
+    runCheckout();
+  };
+
+  const runCheckout = async () => {
     try {
       setCheckingOut(true);
 
@@ -349,6 +410,7 @@ const CartScreen: React.FC = () => {
       if ('offline' in sale && sale.offline) {
         // Clear cart on success (even if offline)
         clearCart();
+        setIngredientFailureIds(new Set());
 
         // Trigger data refresh for offline sale too (stock changed locally)
         onSaleCreated();
@@ -396,6 +458,7 @@ const CartScreen: React.FC = () => {
         clearCart();
         setSelectedRewardId(null);
         setRedemptionDiscount(0);
+        setIngredientFailureIds(new Set());
 
         // Trigger data refresh (dashboard, sales list, menu stock)
         onSaleCreated();
@@ -424,7 +487,51 @@ const CartScreen: React.FC = () => {
       }
     } catch (error: any) {
       printAfterCheckoutRef.current = false; // Reset on error
-      Alert.alert('Checkout Failed', error.message || 'An error occurred during checkout');
+
+      // The backend rejects recipe-driven sales with two distinct kinds of
+      // errors. We surface them with tailored copy so the cashier knows
+      // exactly what to do next, and we leave the cart intact so they can
+      // edit and retry (spec 4.2 / 4.3).
+      const kind = classifyCheckoutError(error);
+      const rawMessage = error?.message || 'An error occurred during checkout';
+
+      if (kind === 'insufficient_ingredients') {
+        // Highlight all RECIPE items — backend doesn't tell us which dish
+        // was the culprit, and pinpointing requires per-ingredient detail
+        // we don't have on the client.
+        const recipeIds = new Set(
+          cart.filter((i) => isRecipeProduct(i.product)).map((i) => i.productId),
+        );
+        setIngredientFailureIds(recipeIds);
+        Alert.alert(
+          'Not enough ingredients',
+          'One or more recipe items cannot be fulfilled because ingredients are short. Reduce the quantity or remove the affected item and try again.',
+          [{ text: 'OK' }],
+        );
+      } else if (kind === 'missing_recipe') {
+        Alert.alert(
+          'Recipe not set',
+          'One of the dishes in this order has no recipe configured. Ask a manager to add its ingredients before selling again.',
+          [
+            { text: 'OK', style: 'cancel' },
+            {
+              text: 'Notify manager',
+              onPress: () => {
+                // Best-effort: log for now; a future CRM/notification API can hook in here.
+                console.log('[recipe-missing] cashier requested manager notification', {
+                  user: user?.id,
+                  productIds: cart
+                    .filter((i) => isRecipeProduct(i.product))
+                    .map((i) => i.productId),
+                });
+                Alert.alert('Notified', 'A note was logged for the manager.');
+              },
+            },
+          ],
+        );
+      } else {
+        Alert.alert('Checkout Failed', rawMessage);
+      }
     } finally {
       setCheckingOut(false);
     }
@@ -441,15 +548,41 @@ const CartScreen: React.FC = () => {
       ? `${API_BASE_URL}${item.product.imageUrl}`
       : null;
 
+    const inventoryType = getInventoryType(item.product);
+    const tracked = isInventoryTracked(item.product);
+    const recipe = isRecipeProduct(item.product);
+    const canIncrement = canAddMore(item.product, item.quantity);
+    const flagged = ingredientFailureIds.has(item.productId);
+
+    // Stock line — numeric for SIMPLE, descriptive for RECIPE/untracked.
+    let stockLine: React.ReactNode;
+    if (!tracked) {
+      stockLine = <Text style={styles.itemStock}>Not stock-tracked</Text>;
+    } else if (recipe) {
+      stockLine = (
+        <Text style={[styles.itemStock, flagged && styles.itemStockError]}>
+          {flagged
+            ? '❌ Ingredients short — reduce or remove'
+            : 'Recipe item · ingredients deducted on sale'}
+        </Text>
+      );
+    } else {
+      stockLine = (
+        <Text style={styles.itemStock}>
+          Stock: {item.product.stock} {item.product.unit}
+        </Text>
+      );
+    }
+
     return (
-      <View style={styles.cartItem}>
+      <View style={[styles.cartItem, flagged && styles.cartItemFlagged]}>
         {imageUrl && (
           <Image source={{ uri: imageUrl }} style={styles.itemImage} />
         )}
         <View style={styles.itemContent}>
           <Text style={styles.itemName}>{item.product.name}</Text>
           <Text style={styles.itemPrice}>₹{Number(item.sellingPrice).toFixed(2)} each</Text>
-          <Text style={styles.itemStock}>Stock: {item.product.stock} {item.product.unit}</Text>
+          {stockLine}
 
           <View style={styles.itemFooter}>
             <View style={styles.quantityControls}>
@@ -463,10 +596,10 @@ const CartScreen: React.FC = () => {
               <TouchableOpacity
                 style={[
                   styles.quantityButton,
-                  item.quantity >= item.product.stock && styles.quantityButtonDisabled,
+                  !canIncrement && styles.quantityButtonDisabled,
                 ]}
                 onPress={() => handleUpdateQuantity(item.productId, 1)}
-                disabled={item.quantity >= item.product.stock}
+                disabled={!canIncrement}
               >
                 <Text style={styles.quantityButtonText}>+</Text>
               </TouchableOpacity>
@@ -857,6 +990,15 @@ const CartScreen: React.FC = () => {
                 <Text style={styles.offlineText}>Offline Mode - Orders will be synced when online</Text>
               </View>
             )}
+
+            {!isOnline && cartHasRecipeItems(cart) && (
+              <View style={styles.recipeOfflineBanner}>
+                <Ionicons name="information-circle" size={16} color="#7c2d12" style={{ marginRight: 6 }} />
+                <Text style={styles.recipeOfflineText}>
+                  Ingredient stock will be validated when back online.
+                </Text>
+              </View>
+            )}
             
             {queuedSalesCount > 0 && (
               <View style={styles.queuedBanner}>
@@ -1068,6 +1210,15 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.1,
     shadowRadius: 4,
     elevation: 3,
+  },
+  cartItemFlagged: {
+    borderWidth: 1.5,
+    borderColor: '#ef4444',
+    backgroundColor: '#fef2f2',
+  },
+  itemStockError: {
+    color: '#b91c1c',
+    fontWeight: '600',
   },
   itemImage: {
     width: 80,
@@ -1483,6 +1634,21 @@ const styles = StyleSheet.create({
   offlineText: {
     fontSize: 14,
     color: '#856404',
+    flex: 1,
+  },
+  recipeOfflineBanner: {
+    backgroundColor: '#ffedd5',
+    padding: 12,
+    borderRadius: 8,
+    marginBottom: 12,
+    borderLeftWidth: 4,
+    borderLeftColor: '#ea580c',
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  recipeOfflineText: {
+    fontSize: 13,
+    color: '#7c2d12',
     flex: 1,
   },
   queuedBanner: {

@@ -5,6 +5,7 @@
  */
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import * as Crypto from 'expo-crypto';
 import { API_BASE_URL } from '../config/api';
 import { apiRequest, getStoredOutletId } from './auth';
 import { Product, CreateSaleRequest, Sale } from '../types/menu';
@@ -170,11 +171,20 @@ export async function getMenuItems(filters?: { search?: string; category?: strin
       return !rawMaterialCategoryNames.includes(product.category.toLowerCase());
     });
     
-    // Fetch stock for all menu items if outlet is selected
+    // Fetch stock only for products that actually use per-product stock.
+    // RECIPE dishes have no direct stock row (ingredients do), and NONE /
+    // untracked items don't participate in stock at all — skip them so the
+    // payload stays small and the request is faster.
     const outletId = await getStoredOutletId();
-    if (outletId && menuItems.length > 0) {
+    const stockEligibleItems = menuItems.filter((p) => {
+      const tracked = p.trackInventory ?? true;
+      const type = p.inventoryType ?? 'SIMPLE';
+      return tracked && type === 'SIMPLE';
+    });
+
+    if (outletId && stockEligibleItems.length > 0) {
       try {
-        const productIds = menuItems.map(p => p.id);
+        const productIds = stockEligibleItems.map(p => p.id);
         const response = await apiRequest(`/stock/outlet/${outletId}?productIds=${productIds.join(',')}`, {
           method: 'GET',
         });
@@ -186,10 +196,12 @@ export async function getMenuItems(filters?: { search?: string; category?: strin
             stockMap.set(stock.productId, stock.quantity);
           });
           
-          // Attach stock to menu items
+          // Attach stock to menu items. RECIPE / NONE / untracked items
+          // keep stock = 0 but aren't gated on it; the UI branches on
+          // inventoryType before reading stock.
           const menuItemsWithStock = menuItems.map(product => ({
             ...product,
-            stock: stockMap.get(product.id) ?? 0,
+            stock: stockMap.get(product.id) ?? product.stock ?? 0,
           }));
           
           // Cache menu items separately for faster access (only if no filters applied)
@@ -266,6 +278,11 @@ export async function getMenuItems(filters?: { search?: string; category?: strin
  * @returns Promise with created sale (or local ID if offline)
  */
 export async function checkout(saleData: CreateSaleRequest): Promise<Sale | { id: string; offline: true }> {
+  const payload: CreateSaleRequest = {
+    ...saleData,
+    idempotencyKey: saleData.idempotencyKey ?? Crypto.randomUUID(),
+  };
+
   // Dynamic import to avoid circular dependency
   const { isOnline, queueSale } = await import('./offlineSales');
   
@@ -275,23 +292,29 @@ export async function checkout(saleData: CreateSaleRequest): Promise<Sale | { id
     
     if (!online) {
       // Queue the sale for later sync
-      const localId = await queueSale(saleData);
+      const localId = await queueSale(payload);
       console.log('Device is offline, sale queued with ID:', localId);
       return { id: localId, offline: true };
     }
 
-    const submitSale = async (payload: CreateSaleRequest) =>
+    const submitSale = async (body: CreateSaleRequest) =>
       apiRequest(
         '/sales',
         {
           method: 'POST',
-          body: JSON.stringify(payload),
+          body: JSON.stringify(body),
         },
         true,
       );
 
+    const httpError = (message: string, status: number) => {
+      const err = new Error(message) as Error & { status: number };
+      err.status = status;
+      return err;
+    };
+
     // Attempt to create sale online
-    let response = await submitSale(saleData);
+    let response = await submitSale(payload);
 
     if (!response.ok) {
       const error = await response.json();
@@ -302,10 +325,10 @@ export async function checkout(saleData: CreateSaleRequest): Promise<Sale | { id
         typeof message === 'string' &&
         message.toLowerCase().includes('date must be a valid iso 8601 date string')
       ) {
-        const parsedDate = new Date(String(saleData.date));
+        const parsedDate = new Date(String(payload.date));
         if (!Number.isNaN(parsedDate.getTime())) {
           const fallbackPayload: CreateSaleRequest = {
-            ...saleData,
+            ...payload,
             // Alternate ISO flavor accepted by some strict validators.
             date: parsedDate.toISOString().replace('.000Z', '+00:00'),
           };
@@ -315,11 +338,11 @@ export async function checkout(saleData: CreateSaleRequest): Promise<Sale | { id
             return sale;
           }
           const retryError = await response.json();
-          throw new Error(retryError?.message || message);
+          throw httpError(retryError?.message || message, response.status);
         }
       }
 
-      throw new Error(message);
+      throw httpError(message, response.status);
     }
 
     const sale: Sale = await response.json();
@@ -338,12 +361,12 @@ export async function checkout(saleData: CreateSaleRequest): Promise<Sale | { id
         // Double check if we're offline
         const online = await isOnline();
         if (!online) {
-          const localId = await queueSale(saleData);
+          const localId = await queueSale(payload);
           console.log('Network error detected, sale queued with ID:', localId);
           return { id: localId, offline: true };
         }
         // If online but network error occurred, still queue it
-        const localId = await queueSale(saleData);
+        const localId = await queueSale(payload);
         console.log('Network error during checkout, sale queued with ID:', localId);
         return { id: localId, offline: true };
       } catch (queueError) {

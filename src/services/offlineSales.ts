@@ -6,7 +6,8 @@
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import NetInfo from '@react-native-community/netinfo';
-import { CreateSaleRequest, Sale } from '../types/menu';
+import * as Crypto from 'expo-crypto';
+import { CreateSaleRequest } from '../types/menu';
 import { checkout } from './menu';
 
 const OFFLINE_SALES_QUEUE_KEY = 'offline_sales_queue';
@@ -90,6 +91,23 @@ export async function updateQueuedSaleRetry(saleId: string, retryCount: number):
   }
 }
 
+/** Legacy queued rows may lack idempotencyKey; assign once and persist so retries dedupe on the server */
+async function ensureQueuedSaleHasIdempotencyKey(q: QueuedSale): Promise<QueuedSale> {
+  if (q.saleData.idempotencyKey) return q;
+  const next: QueuedSale = {
+    ...q,
+    saleData: { ...q.saleData, idempotencyKey: Crypto.randomUUID() },
+  };
+  try {
+    const queuedSales = await getQueuedSales();
+    const merged = queuedSales.map((sale) => (sale.id === q.id ? next : sale));
+    await AsyncStorage.setItem(OFFLINE_SALES_QUEUE_KEY, JSON.stringify(merged));
+  } catch (error) {
+    console.error('Failed to persist idempotency key for queued sale:', error);
+  }
+  return next;
+}
+
 /**
  * Check if device is online
  */
@@ -147,19 +165,18 @@ async function setSyncInProgress(inProgress: boolean): Promise<void> {
  */
 async function syncQueuedSale(queuedSale: QueuedSale): Promise<boolean> {
   try {
-    const sale = await checkout(queuedSale.saleData);
+    const ready = await ensureQueuedSaleHasIdempotencyKey(queuedSale);
+    const result = await checkout(ready.saleData);
+    if ('offline' in result && result.offline) {
+      console.warn(`Sync deferred for queued sale ${queuedSale.id}: still offline or could not reach server`);
+      return false;
+    }
     await removeQueuedSale(queuedSale.id);
     console.log(`Successfully synced sale ${queuedSale.id}`);
     return true;
-  } catch (error: any) {
-    // If it's a validation error (400), remove from queue
-    // Otherwise, increment retry count
-    if (error?.message?.includes('400') || error?.message?.includes('Bad Request')) {
-      console.error(`Sale ${queuedSale.id} failed validation, removing from queue:`, error);
-      await removeQueuedSale(queuedSale.id);
-      return false;
-    }
-
+  } catch (error: unknown) {
+    // Do not drop queue items based on message substring (e.g. "400" inside unrelated text).
+    // Retrying is safe when idempotencyKey is present; permanent bad payloads can be handled later via explicit error codes.
     const newRetryCount = queuedSale.retryCount + 1;
     await updateQueuedSaleRetry(queuedSale.id, newRetryCount);
     console.error(`Failed to sync sale ${queuedSale.id}, retry count: ${newRetryCount}`, error);

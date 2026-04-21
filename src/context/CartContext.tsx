@@ -1,6 +1,12 @@
 import React, { createContext, useState, useEffect, ReactNode } from 'react';
 import { CartItem, Product } from '../types/menu';
 import { useAuth } from './AuthContext';
+import {
+  canAddMore,
+  isInventoryTracked,
+  isRecipeProduct,
+  maxClientQuantity,
+} from '../services/inventory';
 
 interface CartContextType {
   cart: CartItem[];
@@ -30,25 +36,31 @@ export const CartProvider: React.FC<CartProviderProps> = ({ children }) => {
   }, [isAuthenticated]);
 
   const addToCart = (product: Product) => {
-    if (product.stock <= 0) {
+    // SIMPLE+tracked: respect on-hand stock. RECIPE / NONE / untracked:
+    // allow freely — the backend validates ingredient availability at
+    // checkout, and blocking on a meaningless `stock` field would prevent
+    // selling recipe-driven dishes entirely.
+    const simpleOutOfStock =
+      isInventoryTracked(product) &&
+      !isRecipeProduct(product) &&
+      (product.stock ?? 0) <= 0;
+
+    if (simpleOutOfStock) {
       return;
     }
 
     setCart(prev => {
       const existing = prev.find(item => item.productId === product.id);
       if (existing) {
-        // Check if we can add more
-        if (existing.quantity >= product.stock) {
-          return prev; // Can't add more
+        if (!canAddMore(product, existing.quantity)) {
+          return prev;
         }
-        // Increment quantity
         return prev.map(item =>
           item.productId === product.id
             ? { ...item, quantity: item.quantity + 1 }
             : item
         );
       }
-      // Add new item to cart
       return [
         ...prev,
         {
@@ -71,13 +83,14 @@ export const CartProvider: React.FC<CartProviderProps> = ({ children }) => {
       const item = prev.find(i => i.productId === productId);
       if (!item) return prev;
 
-      // Check stock limit
-      if (quantity > item.product.stock) {
-        return prev; // Can't exceed stock
+      // Only cap SIMPLE+tracked products on the client. maxClientQuantity
+      // returns Infinity for RECIPE/untracked items so we never block them.
+      if (quantity > maxClientQuantity(item.product)) {
+        return prev;
       }
 
-      return prev.map(item =>
-        item.productId === productId ? { ...item, quantity } : item
+      return prev.map(ci =>
+        ci.productId === productId ? { ...ci, quantity } : ci
       );
     });
   };

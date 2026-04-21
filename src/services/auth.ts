@@ -397,6 +397,9 @@ export async function apiRequest(
         const refreshed = await refreshTokens(refreshToken);
         token = refreshed.accessToken;
 
+        // Rebuild headers so Authorization uses the refreshed token (spread may have stale Bearer)
+        headers['Authorization'] = `Bearer ${token}`;
+
         // Retry the original request with new token
         response = await fetch(url, {
           ...options,
